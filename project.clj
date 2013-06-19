@@ -10,10 +10,11 @@
                  [com.taoensso/timbre "2.1.2"]
                  ;; Database
                  [com.datomic/datomic-free "0.8.4007"]
+                 ;; Time!
+                 [clj-time "0.5.1"]
                  ;; Money!
                  [clojurewerkz/money "1.3.0"]
                  ]
-
 
   :repl-options {:host "127.0.0.1"
                  :port 9797

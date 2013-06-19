@@ -8,24 +8,31 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/description
+  :db/ident :pro.juxt/description
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "A entity's description."
   :db.install/_attribute :db.part/db}
 
- {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/debit-account
+ #_{:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/transaction
   :db/valueType :db.type/ref
-  :db/cardinality :db.cardinality/one
-  :db/doc "The debit account of a transaction."
+  :db/cardinality :db.cardinality/many
+  :db/doc "A business transaction."
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/credit-account
+  :db/ident :pro.juxt.accounting/debit
   :db/valueType :db.type/ref
-  :db/cardinality :db.cardinality/one
-  :db/doc "The credit account of a transaction."
+  :db/cardinality :db.cardinality/many
+  :db/doc "An account debit."
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/credit
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/many
+  :db/doc "An account credit."
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
@@ -35,9 +42,16 @@
   :db/doc "The date of a transaction."
   :db.install/_attribute :db.part/db}
 
-{:db/id #db/id[:db.part/db]
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/instance-of
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "A transaction can be an instance of a common transaction type, such as 'Full day consulting'."
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/amount
-  :db/valueType :db.type/double
+  :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
   :db/doc "The transaction amount."
   :db.install/_attribute :db.part/db}
@@ -46,6 +60,9 @@
  :db/ident :pro.juxt.accounting/currency
  :db/valueType :db.type/string
  :db/cardinality :db.cardinality/one
- :db/doc "The currency a transaction's amount is denoted in, or the currency of an account."
+ :db/doc "The currency, as a ISO-4217 currency code, that a transaction's amount is denoted in, or the currency of an account."
  :db.install/_attribute :db.part/db}
+
+
+
  ]

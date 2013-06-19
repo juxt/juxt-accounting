@@ -45,8 +45,9 @@
 (defn init []
   (do
     (timbre/set-level! :info)
-    (println "JUXT Accounting. Copyright © 2013, JUXT Ltd. All Rights Reserved.")
-    (println (apply str (repeat 60 \-)))
+    (let [banner "JUXT Accounting. Copyright © 2013, JUXT Ltd. All Rights Reserved."]
+      (println banner)
+      (println (apply str (repeat (count banner) \-))))
     (println "Welcome to JUXT Accounting")
     (println "Type '(help)' for commands and '(exit)' to quit.")
     (init-database)))

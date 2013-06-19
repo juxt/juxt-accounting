@@ -1,0 +1,8 @@
+[
+ {:db/id #db/id[:db.part/user -1]
+  :db/ident :pro.juxt.accounting.standard-transactions/consulting-full-day
+  :pro.juxt/description "Consulting (full day)"}
+
+ {:db/id #db/id[:db.part/user -2]
+  :db/ident :pro.juxt.accounting.standard-transactions/consulting-half-day
+  :pro.juxt/description "Consulting (half day)"}]

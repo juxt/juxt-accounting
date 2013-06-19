@@ -6,7 +6,13 @@ to work in other jurisdictions.
 
 ## Usage
 
+To start the system
+
     $ lein repl
+
+To run the tests
+
+    $ lein test
 
 ## License
 

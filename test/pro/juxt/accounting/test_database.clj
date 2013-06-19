@@ -10,12 +10,16 @@
 ;; You must not remove this notice, or any other, from this software.
 (ns pro.juxt.accounting.test-database
   "Testing the database functions."
+  (:refer-clojure :exclude [zero?])
   (:require
    [clojure.test :refer :all]
    [pro.juxt.accounting.database :refer :all]
    [datomic.api :refer (q db delete-database entity) :as d]
    [taoensso.timbre :as timbre]
-   ))
+   [clojurewerkz.money.currencies :as mc :refer (GBP EUR)]
+   [clojurewerkz.money.amounts :as ma :refer (amount-of zero?)]
+   [clj-time.core :as time :refer (local-date)])
+  (:import (org.joda.money Money CurrencyUnit)))
 
 (defmacro with-temporary-database [tempuri & body]
   `(binding [*dburi* ~tempuri]
@@ -27,13 +31,34 @@
   (fn [f] (with-temporary-database tempuri (f))))
 
 (use-fixtures :each
-  (using-temporary-database "datomic:mem://test-db")
   (fn [f]
     (timbre/set-level! :info)
-    (f)))
+    (f))
+  (using-temporary-database "datomic:mem://test-db"))
 
 (deftest test-create-account
   (let [conn (d/connect *dburi*)
-        id (create-account! conn  "test")]
-    (is (= "test" (:pro.juxt/name (entity (db conn) id))))
-    (is (= "test" (get-name (db conn) id)))))
+        id (create-account! conn "test" EUR :description "test account")
+        db (db conn)]
+    (is (= "test" (:pro.juxt/name (entity db id))))
+    (is (= "test" (get-name db id)))
+    (is (= "test account" (get-description db id)))))
+
+(deftest test-create-transactions
+  (let [conn (d/connect *dburi*)
+        client (create-account! conn "Client X" GBP)
+        consultant (create-account! conn "Consultant Y" GBP)]
+    (create-entry conn client consultant (amount-of GBP 320)
+                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
+                  :date (local-date 2013 06 01))
+    (create-entry conn client consultant (amount-of GBP 320)
+                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
+                  :date (local-date 2013 06 02))
+    (create-entry conn client consultant (amount-of GBP 160)
+                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-half-day
+                  :date (local-date 2013 06 03))
+    (is (= (amount-of GBP 800) (get-balance (db conn) client)))
+    (is (= (amount-of GBP 800) (get-total-debit (db conn) client)))
+    (is (= (amount-of GBP -800) (get-balance (db conn) consultant)))
+    (is (= (amount-of GBP 800) (get-total-credit (db conn) consultant)))
+    (is (zero? (reconcile-accounts (db conn) client consultant)))))
