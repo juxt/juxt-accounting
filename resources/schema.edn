@@ -46,6 +46,6 @@
  :db/ident :pro.juxt.accounting/currency
  :db/valueType :db.type/string
  :db/cardinality :db.cardinality/one
- :db/doc "The currency a transaction's amount is denoted in."
+ :db/doc "The currency a transaction's amount is denoted in, or the currency of an account."
  :db.install/_attribute :db.part/db}
  ]
