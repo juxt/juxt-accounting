@@ -1,0 +1,51 @@
+[
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt/name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "A canonical unique human-readable label for an entity, such as an account name."
+  :db/unique :db.unique/identity
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/description
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "A description of a transaction."
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/debit-account
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The debit account of a transaction."
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/credit-account
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The credit account of a transaction."
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/date
+  :db/valueType :db.type/instant
+  :db/cardinality :db.cardinality/one
+  :db/doc "The date of a transaction."
+  :db.install/_attribute :db.part/db}
+
+{:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/amount
+  :db/valueType :db.type/double
+  :db/cardinality :db.cardinality/one
+  :db/doc "The transaction amount."
+  :db.install/_attribute :db.part/db}
+
+{:db/id #db/id[:db.part/db]
+ :db/ident :pro.juxt.accounting/currency
+ :db/valueType :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/doc "The currency a transaction's amount is denoted in."
+ :db.install/_attribute :db.part/db}
+ ]
