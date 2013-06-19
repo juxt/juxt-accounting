@@ -11,7 +11,7 @@
   :db/ident :pro.juxt.accounting/description
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
-  :db/doc "A description of a transaction."
+  :db/doc "A entity's description."
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
