@@ -83,7 +83,6 @@
     (->> [[:db/add debit-account :pro.juxt.accounting/debit transaction]
           [:db/add credit-account :pro.juxt.accounting/credit transaction]
           [:db/add transaction :pro.juxt.accounting/amount (.getAmount amount)]
-          [:db/add transaction :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]
           (when date [:db/add transaction :pro.juxt.accounting/date (to-date date)])
           (when description [:db/add transaction :pro.juxt/description description])
           (when instance-of [:db/add transaction :pro.juxt.accounting/instance-of instance-of])]
@@ -97,7 +96,7 @@
            :with '[?debit]
            :where [['?account type '?debit]
                    '[?debit :pro.juxt.accounting/amount ?amount]
-                   '[?debit :pro.juxt.accounting/currency ?currency]]
+                   '[?account :pro.juxt.accounting/currency ?currency]]
            } db account)))
 
 (defn get-debits [db account]
