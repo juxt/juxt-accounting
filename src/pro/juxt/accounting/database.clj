@@ -79,8 +79,25 @@
   (to-date [dt] (.toDate dt)))
 
 (defn create-entry [conn debits credits & {:keys [date description instance-of]}]
-  (let [tx (d/tempid :db.part/tx)]
+  {:pre [(every? (partial instance? Money) (concat (vals debits) (vals credits)))]}
 
+  ;; Check that all credits and of the same
+  (doseq [[account amount] (concat (seq debits) (seq credits))]
+    (when-not (= (.getCode (.getCurrencyUnit amount))
+                 (:pro.juxt.accounting/currency (d/entity (db conn) account)))
+      (throw (ex-info "Entry amount is in a different currency to that of the account"
+                      {:entry-currency (.getCurrencyUnit amount)
+                       :account-currency (d/entity (db conn) account)}))))
+
+  ;; This important guard is only for when there is a single currency across all entries
+  ;; Multi-FX transactions can't be checked in this way so are simply accepted.
+  (when (= 1 (count (distinct (map (fn [[_ amount]] (.getCurrencyUnit amount)) (concat (seq debits) (seq credits))))))
+    (when-not (= (total (vals debits)) (total (vals credits)))
+      (throw (ex-info "Debits do not balance with credits" {:debit-total (total (vals debits))
+                                                            :debits (vals debits)
+                                                            :credit-total (total (vals credits))
+                                                            :credits (vals credits)}))))
+  (let [tx (d/tempid :db.part/tx)]
     (transact-async conn (vec
                           (concat
                            (apply concat
@@ -109,8 +126,7 @@
       :where [['?account type '?entry]
               '[?account :pro.juxt.accounting/currency ?currency]
               '[?entry :pro.juxt.accounting/amount ?amount]
-              ]
-      } db account)))
+              ]} db account)))
 
 (defn get-debits [db account]
   (get-transactions db account :pro.juxt.accounting/debit))
