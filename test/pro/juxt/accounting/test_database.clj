@@ -48,13 +48,13 @@
   (let [conn (d/connect *dburi*)
         client (create-account! conn "Client X" GBP)
         consultant (create-account! conn "Consultant Y" GBP)]
-    (create-entry conn client consultant (amount-of GBP 320)
+    (create-entry conn {client (amount-of GBP 320)} {consultant (amount-of GBP 320)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
                   :date (local-date 2013 06 01))
-    (create-entry conn client consultant (amount-of GBP 320)
+    (create-entry conn {client (amount-of GBP 320)} {consultant (amount-of GBP 320)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
                   :date (local-date 2013 06 02))
-    (create-entry conn client consultant (amount-of GBP 160)
+    (create-entry conn {client (amount-of GBP 160)} {consultant (amount-of GBP 160)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-half-day
                   :date (local-date 2013 06 03))
     (is (= (amount-of GBP 800) (get-balance (db conn) client)))

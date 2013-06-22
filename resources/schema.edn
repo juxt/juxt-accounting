@@ -14,11 +14,11 @@
   :db/doc "A entity's description."
   :db.install/_attribute :db.part/db}
 
- #_{:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/transaction
-  :db/valueType :db.type/ref
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/amount
+  :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/many
-  :db/doc "A business transaction."
+  :db/doc "A transaction amount."
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]

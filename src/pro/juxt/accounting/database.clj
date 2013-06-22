@@ -78,26 +78,39 @@
   org.joda.time.DateTime
   (to-date [dt] (.toDate dt)))
 
-(defn create-entry [conn debit-account credit-account ^Money amount & {:keys [date description instance-of]}]
-  (let [transaction (d/tempid :db.part/user)]
-    (->> [[:db/add debit-account :pro.juxt.accounting/debit transaction]
-          [:db/add credit-account :pro.juxt.accounting/credit transaction]
-          [:db/add transaction :pro.juxt.accounting/amount (.getAmount amount)]
-          (when date [:db/add transaction :pro.juxt.accounting/date (to-date date)])
-          (when description [:db/add transaction :pro.juxt/description description])
-          (when instance-of [:db/add transaction :pro.juxt.accounting/instance-of instance-of])]
-         (remove nil?) vec
-         (transact-async conn))))
+(defn create-entry [conn debits credits & {:keys [date description instance-of]}]
+  (let [tx (d/tempid :db.part/tx)]
 
-(defn- get-transactions [db account type]
-  (map (fn [[amount currency]] (Money/of (CurrencyUnit/getInstance currency) amount))
+    (transact-async conn (vec
+                          (concat
+                           (apply concat
+                                  (for [[^long account ^Money amount] debits]
+                                    (let [entry (d/tempid :db.part/user)]
+                                      [[:db/add account :pro.juxt.accounting/debit entry]
+                                       [:db/add entry :pro.juxt.accounting/amount (.getAmount amount)]])))
+                           (apply concat
+                                  (for [[^long account ^Money amount] credits]
+                                    (let [entry (d/tempid :db.part/user)]
+                                      [[:db/add account :pro.juxt.accounting/credit entry]
+                                       [:db/add entry :pro.juxt.accounting/amount (.getAmount amount)]])))
+
+                           (remove nil?
+                                   [(when date [:db/add tx :pro.juxt.accounting/date (to-date date)])
+                                    (when description [:db/add tx :pro.juxt/description description])
+                                    (when instance-of [:db/add tx :pro.juxt.accounting/instance-of instance-of])]))))))
+
+
+
+(defn get-transactions [db account type]
+  (map (fn [[amount currency t]] (Money/of (CurrencyUnit/getInstance currency) amount))
        (q {:find '[?amount ?currency]
-           :in '[$ ?account]
-           :with '[?debit]
-           :where [['?account type '?debit]
-                   '[?debit :pro.juxt.accounting/amount ?amount]
-                   '[?account :pro.juxt.accounting/currency ?currency]]
-           } db account)))
+      :in '[$ ?account]
+      :with '[?entry]
+      :where [['?account type '?entry]
+              '[?account :pro.juxt.accounting/currency ?currency]
+              '[?entry :pro.juxt.accounting/amount ?amount]
+              ]
+      } db account)))
 
 (defn get-debits [db account]
   (get-transactions db account :pro.juxt.accounting/debit))
