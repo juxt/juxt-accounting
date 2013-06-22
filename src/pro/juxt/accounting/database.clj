@@ -78,7 +78,7 @@
   org.joda.time.DateTime
   (to-date [dt] (.toDate dt)))
 
-(defn create-entry [conn debits credits & {:keys [date description instance-of]}]
+(defn create-entry! [conn debits credits & {:keys [date description instance-of]}]
   {:pre [(every? (partial instance? Money) (concat (vals debits) (vals credits)))]}
 
   ;; Check that all credits and of the same
