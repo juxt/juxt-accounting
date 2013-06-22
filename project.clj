@@ -1,4 +1,4 @@
-(defproject accounting "0.1.0"
+(defproject pro.juxt/accounting "0.1.1"
   :description "JUXT Accounting"
   :url "https://juxt.pro/accounting"
   :license {:name "Eclipse Public License"
