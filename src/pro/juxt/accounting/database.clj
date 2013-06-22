@@ -14,7 +14,7 @@
    [clojure
     [set :as set]
     [edn :as edn]]
-   [clojure.java [io :refer (reader)]]
+   [clojure.java [io :refer (reader resource)]]
    [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy)]
    [datomic.api :refer (q db transact transact-async entity) :as d]
    [clojurewerkz.money.amounts :as ma :refer (total zero)])
@@ -38,8 +38,8 @@
     (debug "Using existing database" dburi))
   (let [conn (d/connect dburi)]
     (debug "Loading schema")
-    @(d/transact conn (read-string (slurp "resources/schema.edn")))
-    @(d/transact conn (read-string (slurp "resources/data.edn")))
+    @(d/transact conn (read-string (slurp (resource "schema.edn"))))
+    @(d/transact conn (read-string (slurp (resource "data.edn"))))
     @(d/transact conn (create-functions functions))))
 
 (defmacro insert
