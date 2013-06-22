@@ -52,17 +52,12 @@
 
 (defn create-account!
   "Create an account and return its id."
-  [conn ^String name ^CurrencyUnit currency & {:keys [^String description]}]
-  (->> [[:db/add account :pro.juxt/name name]
+  [conn name ^CurrencyUnit currency & {:keys [^String description]}]
+  (->> [[:db/add account :db/ident name]
         [:db/add account :pro.juxt.accounting/currency (.getCode currency)]
         (when description [:db/add account :pro.juxt/description description])]
        (remove nil?) vec
        (insert conn account)))
-
-(defn get-name
-  "Get the unique name of the given entity."
-  [db e]
-  (:pro.juxt/name (d/entity db e)))
 
 (defn get-description
   "Get the description of the given entity."

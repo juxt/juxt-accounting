@@ -14,7 +14,7 @@
   (:require
    [clojure.test :refer :all]
    [pro.juxt.accounting.database :refer :all]
-   [datomic.api :refer (q db delete-database entity) :as d]
+   [datomic.api :refer (q db delete-database entity ident) :as d]
    [taoensso.timbre :as timbre]
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)]
    [clojurewerkz.money.amounts :as ma :refer (amount-of zero?)]
@@ -38,10 +38,9 @@
 
 (deftest test-create-account
   (let [conn (d/connect *dburi*)
-        id (create-account! conn "test" EUR :description "test account")
+        id (create-account! conn :test EUR :description "test account")
         db (db conn)]
-    (is (= "test" (:pro.juxt/name (entity db id))))
-    (is (= "test" (get-name db id)))
+    (is (= :test (ident db id)))
     (is (= "test account" (get-description db id)))))
 
 (deftest test-create-transactions
