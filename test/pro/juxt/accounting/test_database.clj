@@ -47,17 +47,17 @@
   (let [conn (d/connect *dburi*)
         client (create-account! conn "Client X" GBP)
         consultant (create-account! conn "Consultant Y" GBP)]
-    (create-entry! conn
+    (create-transaction! conn
                   {client (amount-of GBP 320)}
                   {consultant (amount-of GBP 320)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
                   :date (local-date 2013 06 01))
-    (create-entry! conn
+    (create-transaction! conn
                   {client (amount-of GBP 320)}
                   {consultant (amount-of GBP 320)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
                   :date (local-date 2013 06 02))
-    (create-entry! conn
+    (create-transaction! conn
                   {client (amount-of GBP 160)}
                   {consultant (amount-of GBP 160)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-half-day
@@ -74,14 +74,14 @@
         consultant (create-account! conn "Consultant Y" GBP)]
     (testing "Wrong currency"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Entry amount is in a different currency to that of the account"
-                   (create-entry! conn
+                   (create-transaction! conn
                                  {client (amount-of EUR 320)}
                                  {consultant (amount-of GBP 320)}
                                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
                                  :date (local-date 2013 06 01)))))
     (testing "Credits and debits don't balance"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Debits do not balance with credits"
-                   (create-entry! conn
+                   (create-transaction! conn
                                  {client (amount-of GBP 320)}
                                  {consultant (amount-of GBP 300)}
                                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
@@ -91,7 +91,7 @@
   (let [conn (d/connect *dburi*)
         client (create-account! conn "Client X" EUR)
         consultant (create-account! conn "Consultant Y" GBP)]
-    (create-entry! conn
+    (create-transaction! conn
                   {client (amount-of EUR 400)}
                   {consultant (amount-of GBP 300)}
                   :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
