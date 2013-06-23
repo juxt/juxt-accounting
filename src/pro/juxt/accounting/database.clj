@@ -114,7 +114,7 @@
 
 
 (defn get-transactions [db account type]
-  (map (fn [[amount currency t]] (Money/of (CurrencyUnit/getInstance currency) amount))
+  (map (fn [[amount currency]] (Money/of (CurrencyUnit/getInstance currency) amount))
        (q {:find '[?amount ?currency]
       :in '[$ ?account]
       :with '[?entry]
