@@ -116,18 +116,31 @@
 (defn get-transactions [db account type]
   (map (fn [[amount currency]] (Money/of (CurrencyUnit/getInstance currency) amount))
        (q {:find '[?amount ?currency]
-      :in '[$ ?account]
-      :with '[?entry]
-      :where [['?account type '?entry]
-              '[?account :pro.juxt.accounting/currency ?currency]
-              '[?entry :pro.juxt.accounting/amount ?amount]
-              ]} db account)))
+           :in '[$ ?account]
+           :with '[?entry]
+           :where [['?account type '?entry]
+                   '[?account :pro.juxt.accounting/currency ?currency]
+                   '[?entry :pro.juxt.accounting/amount ?amount]
+                   ]} db account)))
+
+(defn get-transactions-with-detail [db account type]
+  (map (fn [[amount currency tx]] {:amount (Money/of (CurrencyUnit/getInstance currency) amount)
+                                   :tx tx
+                                   :type type})
+       (q {:find '[?amount ?currency ?tx]
+           :in '[$ ?account]
+           :with '[?entry]
+           :where [['?account type '?entry]
+                   '[?account :pro.juxt.accounting/currency ?currency]
+                   '[?entry :pro.juxt.accounting/amount ?amount ?tx]
+                   ]} db account)))
 
 (defn get-debits [db account]
   (get-transactions db account :pro.juxt.accounting/debit))
 
 (defn get-credits [db account]
   (get-transactions db account :pro.juxt.accounting/credit))
+
 
 (defn get-total [db account monies]
   (if (empty? monies)
