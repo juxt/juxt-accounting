@@ -53,8 +53,12 @@
       (first clients)
       (throw (ex-info "No common owner to, multiple clients involved" {:clients clients})))))
 
-(defn prepare-invoice [db invoice entries debit-account
-                       vat-account invoice-ref-prefix first-invoice-ref]
+(defn prepare-invoice [db invoice
+                       & {entries :entries
+                          debit-account :debit-to
+                          vat-account :output-tax-account
+                          invoice-ref-prefix :invoice-ref-prefix
+                          first-invoice-ref :initial-invoice-suffix}]
   ;; TODO: Must also come from a set of accounts with a single common currency - write a test first
   (let [client (get-common-client db (map :entry entries))]
     (when-not client (throw (ex-info "All entries must belong to a single client to invoice." {:entries entries})))
@@ -95,11 +99,16 @@
            :date (Date.)
            :debits {debit-account tot}
            :credits (-> (reduce-kv (fn [m k v]
-                            (assoc m k (total (map :amount entries))))
+                                     (assoc m k (total (map :amount entries))))
                                    {} (group-by :account entries))
                         (assoc vat-account vat)))))))))
 
-(defn issue-invoice [conn account-to-credit account-to-debit vat-account until invoice-ref-prefix first-invoice-ref]
+(defn issue-invoice [conn & {account-to-credit :draw-from
+                           account-to-debit :debit-to
+                           vat-account :output-tax-account
+                           until :until
+                           invoice-ref-prefix :invoice-ref-prefix
+                           first-invoice-ref :initial-invoice-suffix :as options}]
   {:pre [(db/conn? conn)]}
   (let [db (d/db conn)
         entries-to-invoice
@@ -110,10 +119,11 @@
         invoiceid (d/tempid :db.part/user)]
 
     (->> (prepare-invoice db invoiceid
-                          entries-to-invoice
-                          account-to-debit
-                          vat-account
-                          invoice-ref-prefix first-invoice-ref)
+                          :entries entries-to-invoice
+                          :debit-to account-to-debit
+                          :output-tax-account vat-account
+                          :invoice-ref-prefix invoice-ref-prefix
+                          :initial-invoice-suffix first-invoice-ref)
          (db/transact-insert conn invoiceid))))
 
 (defn get-invoice-date [invoice db]
