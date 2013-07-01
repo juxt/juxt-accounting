@@ -53,7 +53,8 @@
       (first clients)
       (throw (ex-info "No common owner to, multiple clients involved" {:clients clients})))))
 
-(defn prepare-invoice [db invoice entries debit-account vat-account invoice-ref-prefix first-invoice-ref]
+(defn prepare-invoice [db invoice entries debit-account
+                       vat-account invoice-ref-prefix first-invoice-ref]
   ;; TODO: Must also come from a set of accounts with a single common currency - write a test first
   (let [client (get-common-client db (map :entry entries))]
     (when-not client (throw (ex-info "All entries must belong to a single client to invoice." {:entries entries})))
@@ -68,6 +69,7 @@
         [[:db/add invoice :pro.juxt.accounting/parent client]
          [:pro.juxt.accounting/generate-invoice-ref invoice invoice-ref-prefix first-invoice-ref]
          [:db/add invoice :pro.juxt.accounting/subtotal (.getAmount subtotal)]
+         [:db/add invoice :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit subtotal))]
          [:db/add invoice :pro.juxt.accounting/vat (.getAmount vat)]
          [:db/add invoice :pro.juxt.accounting/total (.getAmount tot)]]
 
@@ -81,7 +83,8 @@
                     [:db/add entry :pro.juxt.accounting/invoice invoice]
                     [:db/add id :pro.juxt.accounting/date (:pro.juxt.accounting/date tx)]
                     [:db/add id :pro.juxt/description (:pro.juxt/description tx)]
-                    [:db/add id :pro.juxt.accounting/amount (.getAmount amount)]])))
+                    [:db/add id :pro.juxt.accounting/amount (.getAmount amount)]
+                    [:db/add id :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]])))
 
         ;; Credit the accounts where the entries are drawn from because they've now been invoiced.
         ;; Credit the VAT account, HMRC output-tax is incurred at the time of invoice (usually).
@@ -99,18 +102,18 @@
 (defn issue-invoice [conn account-to-credit account-to-debit vat-account until invoice-ref-prefix first-invoice-ref]
   {:pre [(db/conn? conn)]}
   (let [db (d/db conn)
-        entries-to-invoice (filter (every-pred
-                                    (until-pred db until)
-                                    (comp not :invoice))
-                                   (db/get-debits db account-to-credit))
+        entries-to-invoice
+        (filter (every-pred
+                 (until-pred db until)
+                 (comp not :invoice))
+                (db/get-debits db account-to-credit))
         invoiceid (d/tempid :db.part/user)]
 
     (->> (prepare-invoice db invoiceid
-                             entries-to-invoice
-                             account-to-debit
-                             vat-account
-                             invoice-ref-prefix first-invoice-ref
-                             )
+                          entries-to-invoice
+                          account-to-debit
+                          vat-account
+                          invoice-ref-prefix first-invoice-ref)
          (db/transact-insert conn invoiceid))))
 
 (defn get-invoice-date [invoice db]
@@ -124,21 +127,22 @@
 (defn get-invoice-items [invoice db]
   {:pre [(db/entity? invoice)
          (db/db? db)]}
-  (->> (d/q '[:find ?date ?description ?amount
+  (->> (d/q '[:find ?date ?description ?amount ?currency
               :in $ ?invoice
               :where
               [?invoice :pro.juxt.accounting/item ?item]
               [?item :pro.juxt.accounting/date ?date]
               [?item :pro.juxt/description ?description]
               [?item :pro.juxt.accounting/amount ?amount]
+              [?item :pro.juxt.accounting/currency ?currency]
               ] db (:db/id invoice))
        (sort-by (comp #(.getTime %) first) (comparator <))
-       (map (partial zipmap [:date :description :amount]))))
+       (map (partial zipmap [:date :description :amount :currency]))))
 
 (defn print-invoice [{:keys [items subtotal vat total invoice-date
                              invoice-ref client-address
                              client-addressee client-name
-                             notes issuer]} out]
+                             issuer currency-symbol]} out]
   (pdf
    [{:size :a4 :pages true}
     [:table {:border-width 0}
@@ -192,18 +196,18 @@
 
       [[:cell {:align :left} [:chunk ""]]
        [:cell {:align :left} [:chunk "Subtotal"]]
-       [:cell {:align :right} [:chunk ~subtotal]]]
+       [:cell {:align :right} [:chunk ~(str currency-symbol subtotal)]]]
 
       [[:cell {:align :left} [:chunk ""]]
        [:cell {:align :left} [:chunk "VAT"]]
-       [:cell {:align :right} [:chunk ~vat]]]
+       [:cell {:align :right} [:chunk ~(str currency-symbol vat)]]]
 
       [[:cell {:align :left} [:chunk ""]]
        [:cell {:align :left} [:chunk "TOTAL"]]
-       [:cell {:align :right} [:chunk ~total]]]]
+       [:cell {:align :right} [:chunk ~(str currency-symbol total)]]]]
 
     [:spacer 2]
-    [:chunk notes]
+    [:chunk (-> issuer :notes)]
     [:spacer 4]
     [:line {:dotted true}]
     [:spacer 1]
@@ -217,7 +221,8 @@
                         #(DateTime. %)
                         #(.getTime %) :date)
             :description :description
-            :amount (comp str :amount)}))
+            :amount (fn [item] (str (.getSymbol (CurrencyUnit/getInstance (:currency item)))
+                                    (str (:amount item))))}))
 
 (defn create-invoice-pdf-template [issuer-fields]
   {:pre [(every? (set (keys issuer-fields)) [:title :signatory :company-name :company-address :vat-no :bank-account-no :bank-sort-code])]}
@@ -240,6 +245,9 @@
                             :items (fn [invoice] (->>
                                                   (get-invoice-items invoice db)
                                                   (map printable-item)))
+                            :currency-symbol (comp #(.getSymbol %)
+                                                   #(CurrencyUnit/getInstance %)
+                                                   :pro.juxt.accounting/currency)
                             :subtotal :pro.juxt.accounting/subtotal
                             :vat :pro.juxt.accounting/vat
                             :total :pro.juxt.accounting/total}))]
