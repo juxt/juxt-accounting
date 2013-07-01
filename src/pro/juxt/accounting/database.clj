@@ -52,7 +52,9 @@
   org.joda.time.DateTime
   (to-date [dt] (.toDate dt))
   Date
-  (to-date [d] d))
+  (to-date [d] d)
+  Long
+  (to-date [l] (Date. l)))
 
 (defprotocol EntityReference
   (to-ref-id [_])

@@ -113,7 +113,7 @@
   (let [db (d/db conn)
         entries-to-invoice
         (filter (every-pred
-                 (until-pred db until)
+                 (until-pred db (.getTime (db/to-date until)))
                  (comp not :invoice))
                 (db/get-debits db account-to-credit))
         invoiceid (d/tempid :db.part/user)]

@@ -22,7 +22,7 @@
     [invoicing :as invoicing]]
    [datomic.api :as d]
    [clojurewerkz.money.amounts :as ma :refer (amount-of zero? total)]
-   [clojurewerkz.money.currencies :as mc :refer (GBP EUR BTC)]
+   [clojurewerkz.money.currencies :as mc :refer (GBP EUR)]
    [clojure.java.io :as io]
    [clojure.edn :as edn]
    [clj-time.core :as time]
@@ -62,12 +62,12 @@
     ;; Create accounts
     (create-static conn)
 
-    ;; Add transactions
+    ;; Add transaction
     @(d/transact conn
                  (let [txid (d/tempid :db.part/tx)]
-                   (cons [:db/add txid :pro.juxt/description description]
+                   (cons [:db/add txid :pro.juxt/description "Work done"]
                          (db/assemble-transaction
-                          db txid
+                          (d/db conn) txid
                           :date (java.util.Date.)
                           :debits {:client-worked (amount-of GBP 1000)}
                           :credits {:subcontract-worked (amount-of GBP 1000)}
@@ -86,5 +86,11 @@
                     :bank-account-no accno
                     :bank-sort-code sortcode})]
 
-      (-> (invoicing/issue-invoice conn :client-worked :client-invoiced :output-vat (java.util.Date.) "MARS-2013-" "01")
+      (-> (invoicing/issue-invoice conn
+                                   :draw-from :client-worked
+                                   :debit-to :client-invoiced
+                                   :output-tax-account :output-vat
+                                   :until (.getTime (java.util.Date.))
+                                   :invoice-ref-prefix "MARS-2013-"
+                                   :initial-invoice-suffix "01")
           (printer (d/db conn))))))
