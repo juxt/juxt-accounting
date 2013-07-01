@@ -3,58 +3,126 @@
   :db/ident :pro.juxt/description
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
-  :db/doc "A entity's description."
+  :db/doc "An entity's description"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/amount
-  :db/valueType :db.type/bigdec
+  :db/ident :pro.juxt.accounting/name
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "An entity's name"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/parent
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "A parent used for containment of related entities"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/postal-address
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "A entity's postal address, as an EDN vector of address lines"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/principal
+  :db/valueType :db.type/string
   :db/cardinality :db.cardinality/many
-  :db/doc "A transaction amount."
+  :db/doc "The principal of a company. Someone to address when billing"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/account
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The containing account"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/debit
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
-  :db/doc "An account debit."
+  :db/doc "An account debit"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/credit
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
-  :db/doc "An account credit."
+  :db/doc "An account credit"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/date
   :db/valueType :db.type/instant
   :db/cardinality :db.cardinality/one
-  :db/doc "The date of a transaction."
+  :db/doc "The date of a transaction"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/instance-of
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
-  :db/doc "A transaction can be an instance of a common transaction type, such as 'Full day consulting'."
+  :db/doc "A transaction can be an instance of a common transaction type, such as 'Full day consulting'"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/amount
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
-  :db/doc "The transaction amount."
+  :db/doc "The transaction amount"
   :db.install/_attribute :db.part/db}
 
-{:db/id #db/id[:db.part/db]
- :db/ident :pro.juxt.accounting/currency
- :db/valueType :db.type/string
- :db/cardinality :db.cardinality/one
- :db/doc "The currency, as a ISO-4217 currency code, that a transaction's amount is denoted in, or the currency of an account."
- :db.install/_attribute :db.part/db}
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/currency
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The currency, as a ISO-4217 currency code, that a transaction's amount is denoted in, or the currency of an account"
+  :db.install/_attribute :db.part/db}
 
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/invoice
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The invoice associated with an entry"
+  :db.install/_attribute :db.part/db}
 
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/invoice-ref
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "An invoice's reference label"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/item
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/many
+  :db/doc "An item, e.g. in an invoice"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/subtotal
+  :db/valueType :db.type/bigdec
+  :db/cardinality :db.cardinality/one
+  :db/doc "A subtotal of an invoice"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/total
+  :db/valueType :db.type/bigdec
+  :db/cardinality :db.cardinality/one
+  :db/doc "A total of an invoice"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/vat
+  :db/valueType :db.type/bigdec
+  :db/cardinality :db.cardinality/one
+  :db/doc "VAT (UK sales tax) on an invoice"
+  :db.install/_attribute :db.part/db}
 
  ]

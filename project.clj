@@ -14,6 +14,8 @@
                  [clj-time "0.5.1"]
                  ;; Money!
                  [clojurewerkz/money "1.3.0"]
+                 ;; Printing
+                 [clj-pdf "1.10.0"]
                  ]
 
   :repl-options {:host "127.0.0.1"
@@ -21,7 +23,6 @@
                  :prompt (fn [ns] (str "JUXT Accounting: [" ns "]> "))
                  :init-ns pro.juxt.accounting.repl
                  :init (do (require 'pro.juxt.accounting.repl)
-                           (pro.juxt.accounting.repl/init))
-                 :nrepl-middleware [pro.juxt.accounting.repl/bind-dburi]}
+                           (pro.juxt.accounting.repl/init))}
 
 )

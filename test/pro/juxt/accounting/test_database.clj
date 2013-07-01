@@ -1,28 +1,36 @@
 ;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
 ;;
-;; The use and distribution terms for this software are covered by the
-;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
-;; which can be found in the file epl-v10.html at the root of this distribution.
+;; This file is part of JUXT Accounting.
 ;;
-;; By using this software in any fashion, you are agreeing to be bound by the
-;; terms of this license.
+;; JUXT Accounting is free software: you can redistribute it and/or modify it under the
+;; terms of the GNU Affero General Public License as published by the Free
+;; Software Foundation, either version 3 of the License, or (at your option) any
+;; later version.
 ;;
-;; You must not remove this notice, or any other, from this software.
+;; JUXT Accounting is distributed in the hope that it will be useful but WITHOUT ANY
+;; WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+;; A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more
+;; details.
+;;
+;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
+;;
 (ns pro.juxt.accounting.test-database
   "Testing the database functions."
   (:refer-clojure :exclude [zero?])
   (:require
    [clojure.test :refer :all]
    [pro.juxt.accounting.database :refer :all]
-   [datomic.api :refer (q db delete-database entity ident) :as d]
+   [datomic.api :refer (q db delete-database entity ident transact tempid) :as d]
    [taoensso.timbre :as timbre]
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)]
    [clojurewerkz.money.amounts :as ma :refer (amount-of zero?)]
    [clj-time.core :as time :refer (local-date)])
   (:import (org.joda.money Money CurrencyUnit)))
 
+(def dburi "datomic:mem://test-db")
+
 (defmacro with-temporary-database [tempuri & body]
-  `(binding [*dburi* ~tempuri]
+  `(do
      (~delete-database ~tempuri)
      (~init ~tempuri)
      ~@body))
@@ -34,34 +42,50 @@
   (fn [f]
     (timbre/set-level! :info)
     (f))
-  (using-temporary-database "datomic:mem://test-db"))
+  (using-temporary-database dburi))
+
+(deftest test-create-legal-entity
+  (let [conn (d/connect dburi)
+        ent (create-legal-entity! conn :ident :test-client)]
+    (is (= :test-client (:db/ident ent)))))
 
 (deftest test-create-account
-  (let [conn (d/connect *dburi*)
-        id (create-account! conn :test EUR :description "test account")
-        db (db conn)]
-    (is (= :test (ident db id)))
-    (is (= "test account" (get-description db id)))))
+  (let [conn (d/connect dburi)
+        owner (create-legal-entity! conn :ident :test-client)
+        acc (create-account! conn
+                             :parent :test-client
+                             :ident :test-account
+                             :currency EUR
+                             :description "Just for testing")]
+    (is (= :test-account (:db/ident acc)))
+    (is (= "Just for testing" (:pro.juxt/description acc)))))
 
 (deftest test-create-transactions
-  (let [conn (d/connect *dburi*)
-        client (create-account! conn "Client X" GBP)
-        consultant (create-account! conn "Consultant Y" GBP)]
-    (create-transaction! conn
-                  {client (amount-of GBP 320)}
-                  {consultant (amount-of GBP 320)}
-                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
-                  :date (local-date 2013 06 01))
-    (create-transaction! conn
-                  {client (amount-of GBP 320)}
-                  {consultant (amount-of GBP 320)}
-                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
-                  :date (local-date 2013 06 02))
-    (create-transaction! conn
-                  {client (amount-of GBP 160)}
-                  {consultant (amount-of GBP 160)}
-                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-half-day
-                  :date (local-date 2013 06 03))
+  (let [conn (d/connect dburi)
+        owner (create-legal-entity! conn :ident :test-client)
+        client (create-account! conn :parent :test-client :ident :client-x :currency GBP)
+        consultant (create-account! conn :ident :consultant-y :currency GBP)]
+    @(transact conn
+               (assemble-transaction
+                (db conn)
+                (tempid :db.part/tx)
+                :debits {client (amount-of GBP 320)}
+                :credits {consultant (amount-of GBP 320)}
+                :date (local-date 2013 06 01)))
+    @(transact conn
+               (assemble-transaction
+                (db conn)
+                (tempid :db.part/tx)
+                :debits {client (amount-of GBP 320)}
+                :credits {consultant (amount-of GBP 320)}
+                :date (local-date 2013 06 02)))
+    @(transact conn
+               (assemble-transaction
+                (db conn)
+                (tempid :db.part/tx)
+                :debits {client (amount-of GBP 160)}
+                :credits {consultant (amount-of GBP 160)}
+                :date (local-date 2013 06 03)))
     (is (= (amount-of GBP 800) (get-balance (db conn) client)))
     (is (= (amount-of GBP 800) (get-total-debit (db conn) client)))
     (is (= (amount-of GBP -800) (get-balance (db conn) consultant)))
@@ -69,30 +93,37 @@
     (is (zero? (reconcile-accounts (db conn) client consultant)))))
 
 (deftest test-illegal-transactions
-  (let [conn (d/connect *dburi*)
-        client (create-account! conn "Client X" GBP)
-        consultant (create-account! conn "Consultant Y" GBP)]
+  (let [conn (d/connect dburi)
+        client (create-account! conn :ident :client-x :currency GBP)
+        consultant (create-account! conn :ident :consultant-y :currency GBP)]
     (testing "Wrong currency"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Entry amount is in a different currency to that of the account"
-                   (create-transaction! conn
-                                 {client (amount-of EUR 320)}
-                                 {consultant (amount-of GBP 320)}
-                                 :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
-                                 :date (local-date 2013 06 01)))))
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"Entry amount is in a different currency to that of the account"
+           @(transact conn
+                      (assemble-transaction
+                       (db conn)
+                       (tempid :db.part/tx)
+                       :debits {client (amount-of EUR 320)}
+                       :credits {consultant (amount-of GBP 320)}
+                       :date (local-date 2013 06 01))))))
     (testing "Credits and debits don't balance"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Debits do not balance with credits"
-                   (create-transaction! conn
-                                 {client (amount-of GBP 320)}
-                                 {consultant (amount-of GBP 300)}
-                                 :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
-                                 :date (local-date 2013 06 01)))))))
+                            @(transact conn
+                                      (assemble-transaction
+                                       (db conn)
+                                       (tempid :db.part/tx)
+                                       :debits {client (amount-of GBP 320)}
+                                       :credits {consultant (amount-of GBP 300)}
+                                       :date (local-date 2013 06 01))))))))
 
 (deftest test-multifx-transaction
-  (let [conn (d/connect *dburi*)
-        client (create-account! conn "Client X" EUR)
-        consultant (create-account! conn "Consultant Y" GBP)]
-    (create-transaction! conn
-                  {client (amount-of EUR 400)}
-                  {consultant (amount-of GBP 300)}
-                  :instance-of :pro.juxt.accounting.standard-transactions/consulting-full-day
-                  :date (local-date 2013 06 01))))
+  (let [conn (d/connect dburi)
+        client (create-account! conn :ident :client-x :currency EUR)
+        consultant (create-account! conn :ident :consultant-y :currency GBP)]
+    (transact conn
+              (assemble-transaction
+               (db conn)
+               (tempid :db.part/tx)
+               :debits {client (amount-of EUR 400)}
+               :credits {consultant (amount-of GBP 300)}
+               :date (local-date 2013 06 01)))))

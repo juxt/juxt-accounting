@@ -1,26 +1,34 @@
 ;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
 ;;
-;; The use and distribution terms for this software are covered by the
-;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
-;; which can be found in the file epl-v10.html at the root of this distribution.
+;; This file is part of JUXT Accounting.
 ;;
-;; By using this software in any fashion, you are agreeing to be bound by the
-;; terms of this license.
+;; JUXT Accounting is free software: you can redistribute it and/or modify it under the
+;; terms of the GNU Affero General Public License as published by the Free
+;; Software Foundation, either version 3 of the License, or (at your option) any
+;; later version.
 ;;
-;; You must not remove this notice, or any other, from this software.
+;; JUXT Accounting is distributed in the hope that it will be useful but WITHOUT ANY
+;; WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+;; A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more
+;; details.
+;;
+;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
+;;
 (ns pro.juxt.accounting.repl
   (require
    [clojure.pprint :refer (pprint)]
    [taoensso.timbre :as timbre]
    [pro.juxt.accounting
-    [config :refer (config)]
-    [database :as db :refer (*dburi*)]]))
+    [database :as db]
+    [config :refer (config)]]))
 
 (defn ^::command init-database "Create and initialise the database." []
   (db/init (:dburi (config)))
   :ok)
 
-(defn ^::command logging "Set log settings. (logging :level :debug) will set the logging level to debug. With no arguments it will print the logging configuration."
+(defn ^{::command true
+        :doc "Set log settings. (logging :level :debug) will set the logging level to debug. With no arguments it will print the logging configuration."}
+  logging
   ([& {:keys [level]}]
      (when level
        (timbre/set-level! level)
@@ -28,8 +36,7 @@
        (timbre/debug "Debug logging on")
        (timbre/trace "Trace logging on"))
      :ok)
-  ([] (pprint @timbre/config) :ok)
-  )
+  ([] (pprint @timbre/config) :ok))
 
 (defn ^::command help "List available commands." []
   (doseq [[k v] (ns-publics *ns*)]
@@ -51,8 +58,3 @@
     (println "Welcome to JUXT Accounting")
     (println "Type '(help)' for commands and '(exit)' to quit.")
     (init-database)))
-
-(defn bind-dburi [handler]
-  (fn [msg]
-    (binding [*dburi* (:dburi (config))]
-      (handler msg))))

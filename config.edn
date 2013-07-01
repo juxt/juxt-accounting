@@ -1,1 +1,0 @@
-{:nomad/hosts {"nessa" {:dburi "datomic:mem://juxt.pro/accounting"}}}
