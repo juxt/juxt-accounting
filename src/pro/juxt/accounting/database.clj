@@ -75,7 +75,7 @@
 (def functions {:pro.juxt.accounting/generate-invoice-ref
                 {:doc "Generate invoice reference"
                  :params '[db invoice prefix init]
-                 :path "resources/schema/pro/juxt/accounting/generate_invoice_ref.clj"}})
+                 :path "schema/pro/juxt/accounting/generate_invoice_ref.clj"}})
 
 (defn create-functions [functions]
   (vec
@@ -83,7 +83,7 @@
      {:db/id (d/tempid :db.part/user)
       :db/ident ident
       :db/doc doc
-      :db/fn (d/function {:lang "clojure" :params params :code (slurp path)})})))
+      :db/fn (d/function {:lang "clojure" :params params :code (slurp (resource path))})})))
 
 (defn init [dburi]
   (if (d/create-database dburi)
@@ -124,17 +124,30 @@
 
 (defn create-account!
   "Create an account and return its id."
-  [conn & {:keys [parent ident ^CurrencyUnit currency ^String description]}]
-  {:pre [(not (nil? currency))
-         (or (nil? ident) (keyword? ident))
-         ]}
+  [conn & {:keys [entity type ^CurrencyUnit currency ^String description]}]
+  {:pre [(not (nil? currency))]}
   (let [account (d/tempid :db.part/user)]
-    (->> [(when parent [:db/add account :pro.juxt.accounting/parent (to-ref-id parent)])
-          (when ident [:db/add account :db/ident ident])
+    (->> [(when entity [:db/add account :pro.juxt.accounting/entity (to-ref-id entity)])
+;;          (when ident [:db/add account :db/ident ident])
+          (when type [:db/add account :pro.juxt.accounting/account-type type])
           [:db/add account :pro.juxt.accounting/currency (.getCode currency)]
           (when description [:db/add account :pro.juxt/description description])]
          (remove nil?) vec
          (transact-insert conn account))))
+
+(defn find-account
+  "Find an entity's account of a given type"
+  [db {:keys [entity type]}]
+  {:pre [(db? db)
+         (not (nil? entity))
+         (not (nil? type))]}
+  (ffirst
+   (q '[:find ?account
+        :in $ ?entity ?type
+        :where
+        [?account :pro.juxt.accounting/entity ?entity]
+        [?account :pro.juxt.accounting/account-type ?type]]
+      db (to-ref-id entity) type)))
 
 (defn assemble-transaction
   "Assemble the Datomic txdata for a financial transaction. All entries
@@ -148,7 +161,6 @@
          (map? debits)
          (map? credits)
          (every? (partial instance? Money) (concat (vals debits) (vals credits)))]}
-
   ;; Check that all credits and of the same currency
   (doseq [[account amount] (concat (seq debits) (seq credits))]
     (when-not (= (.getCode (.getCurrencyUnit amount))

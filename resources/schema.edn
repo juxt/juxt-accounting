@@ -14,10 +14,17 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/parent
+  :db/ident :pro.juxt.accounting/entity
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
-  :db/doc "A parent used for containment of related entities"
+  :db/doc "A company, client, supplier or other organisations"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/account-type
+  :db/valueType :db.type/keyword
+  :db/cardinality :db.cardinality/one
+  :db/doc "The type of an account (expenses, etc.)"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]

@@ -40,18 +40,18 @@
 (defn until-pred [db d]
   (comp (partial > d) get-time :pro.juxt.accounting/date (partial d/entity db) :tx))
 
-(defn get-common-client [db items]
-  (let [clients
-        (distinct (map (comp :pro.juxt.accounting/parent
+(defn get-common-entity [db items]
+  (let [entities
+        (distinct (map (comp :pro.juxt.accounting/entity
                              (partial d/entity db)
                              :db/id
                              first
                              :pro.juxt.accounting/_debit
                              (partial d/entity db))
                        items))]
-    (if (= 1 (count clients))
-      (first clients)
-      (throw (ex-info "No common owner to, multiple clients involved" {:clients clients})))))
+    (if (= 1 (count entities))
+      (first entities)
+      (throw (ex-info "No common entity, multiple entities involved" {:entities entities})))))
 
 (defn prepare-invoice [db invoice
                        & {entries :entries
@@ -60,8 +60,8 @@
                           invoice-ref-prefix :invoice-ref-prefix
                           first-invoice-ref :initial-invoice-suffix}]
   ;; TODO: Must also come from a set of accounts with a single common currency - write a test first
-  (let [client (get-common-client db (map :entry entries))]
-    (when-not client (throw (ex-info "All entries must belong to a single client to invoice." {:entries entries})))
+  (let [entity (get-common-entity db (map :entry entries))]
+    (when-not entity (throw (ex-info "All entries must belong to a single client to invoice." {:entries entries})))
     (vec
      (let [subtotal (total (map :amount entries))
            vat (-> subtotal (ma/multiply 20) (ma/divide 100))
@@ -70,7 +70,7 @@
        (concat
 
         ;; Add statements for invoice-level data.
-        [[:db/add invoice :pro.juxt.accounting/parent client]
+        [[:db/add invoice :pro.juxt.accounting/entity entity]
          [:pro.juxt.accounting/generate-invoice-ref invoice invoice-ref-prefix first-invoice-ref]
          [:db/add invoice :pro.juxt.accounting/subtotal (.getAmount subtotal)]
          [:db/add invoice :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit subtotal))]
@@ -130,7 +130,7 @@
   (ffirst (d/q '[:find ?date
                  :in $ ?invoice
                  :where
-                 [?invoice :pro.juxt.accounting/parent ?client ?tx]
+                 [?invoice :pro.juxt.accounting/entity ?entity ?tx]
                  [?tx :db/txInstant ?date]
                  ] db (db/to-ref-id invoice))))
 
@@ -239,10 +239,10 @@
   (fn [invoice db]
     ;;  {:pre [(db/entity? invoice)]}
 
-    (let [client (d/entity db (:pro.juxt.accounting/parent invoice))
+    (let [entity (d/entity db (:pro.juxt.accounting/entity invoice))
           fields (merge
                   {:issuer issuer-fields}
-                  (map-map client
+                  (map-map entity
                            {:client-addressee (comp first :pro.juxt.accounting/principal)
                             :client-name :pro.juxt.accounting/name
                             :client-address (comp edn/read-string :pro.juxt.accounting/postal-address)})
