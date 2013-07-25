@@ -24,13 +24,18 @@ To start the system :-
 
     $ lein repl
 
-# Examples
+## Examples
 
 A example of using the API can be found in the file ```test/pro/juxt/accounting/example.clj```.
 
-# Scope
+## Scope
 
 I wrote _JUXT Accounting_ to manage our JUXT business affairs so it's naturally tailored to these requirements. However, double-entry bookkeeping, [invented in Italy in the 15th century](https://en.wikipedia.org/wiki/Double-entry_bookkeeping_system), is used worldwide today.
+
+## Principles
+
+* Free software - designed to give maximum flexibility to _users_ (at the expense of software providers)
+* Strict separation of code and data, that is, separation between this software and your accounts data.
 
 ## Technology
 
