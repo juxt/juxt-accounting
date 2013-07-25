@@ -3,7 +3,7 @@
   :db/ident :pro.juxt/description
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
-  :db/doc "An entity's description"
+  :db/doc "A general description"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
@@ -11,6 +11,13 @@
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "An entity's name"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/code
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "A code which can placed against any (datomic) entity"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
@@ -28,17 +35,31 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/postal-address
+  :db/ident :pro.juxt.accounting/registered-address
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
-  :db/doc "A entity's postal address, as an EDN vector of address lines"
+  :db/doc "A entity's registered address, as an EDN vector of address lines"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/principal
+  :db/ident :pro.juxt.accounting/invoice-address
   :db/valueType :db.type/string
-  :db/cardinality :db.cardinality/many
-  :db/doc "The principal of a company. Someone to address when billing"
+  :db/cardinality :db.cardinality/one
+  :db/doc "A postal address to use when sending invoices to an entity, as an EDN vector of address lines"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/invoice-addressee
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The addressee to use when invoicing an entity"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/vat-number
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "An organization's VAT number"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
@@ -46,6 +67,20 @@
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/doc "The containing account"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/account-number
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "An account's (bank) account number"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/sort-code
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "An account's (bank) sort-code"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
@@ -105,6 +140,20 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/invoice-date
+  :db/valueType :db.type/instant
+  :db/cardinality :db.cardinality/one
+  :db/doc "The cut-off date up until which accrued items are collated for invoicing"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/issue-date
+  :db/valueType :db.type/instant
+  :db/cardinality :db.cardinality/one
+  :db/doc "The date on which the invoice is issued"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/item
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
@@ -126,10 +175,17 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/vat
+  :db/ident :pro.juxt.accounting/output-tax
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
-  :db/doc "VAT (UK sales tax) on an invoice"
+  :db/doc "Output tax (UK VAT or sales tax) added to an invoice"
   :db.install/_attribute :db.part/db}
 
- ]
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/purchase-order-reference
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The purchase order reference number associated with an invoice"
+  :db.install/_attribute :db.part/db}
+
+]

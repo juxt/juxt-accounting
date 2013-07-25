@@ -109,7 +109,7 @@
 
 (defn create-legal-entity!
   "Create a legal entity and return its id."
-  [conn & {:keys [ident name postal-address principal]}]
+  [conn & {:keys [ident name code vat-no registered-address invoice-address invoice-addressee]}]
   {:pre [(conn? conn)
          (or (nil? ident) (keyword? ident))
          (or (nil? name) (string? name))
@@ -117,21 +117,26 @@
   (let [legal-entity (d/tempid :db.part/user)]
     (->> [(when ident [:db/add legal-entity :db/ident ident])
           (when name [:db/add legal-entity :pro.juxt.accounting/name name])
-          (when principal [:db/add legal-entity :pro.juxt.accounting/principal principal])
-          (when postal-address [:db/add legal-entity :pro.juxt.accounting/postal-address (str postal-address)])]
+          (when code [:db/add legal-entity :pro.juxt.accounting/code code])
+          (when vat-no [:db/add legal-entity :pro.juxt.accounting/vat-number vat-no])
+          (when invoice-addressee [:db/add legal-entity :pro.juxt.accounting/invoice-addressee invoice-addressee])
+          (when registered-address [:db/add legal-entity :pro.juxt.accounting/registered-address (str registered-address)])
+          (when invoice-address [:db/add legal-entity :pro.juxt.accounting/invoice-address (str invoice-address)])]
          (remove nil?) vec
          (transact-insert conn legal-entity))))
 
 (defn create-account!
   "Create an account and return its id."
-  [conn & {:keys [entity type ^CurrencyUnit currency ^String description]}]
+  [conn & {:keys [entity type ^CurrencyUnit currency ^String description ^String account-no ^String sort-code]}]
   {:pre [(not (nil? currency))]}
   (let [account (d/tempid :db.part/user)]
     (->> [(when entity [:db/add account :pro.juxt.accounting/entity (to-ref-id entity)])
 ;;          (when ident [:db/add account :db/ident ident])
           (when type [:db/add account :pro.juxt.accounting/account-type type])
           [:db/add account :pro.juxt.accounting/currency (.getCode currency)]
-          (when description [:db/add account :pro.juxt/description description])]
+          (when description [:db/add account :pro.juxt/description description])
+          (when account-no [:db/add account :pro.juxt.accounting/account-number account-no])
+          (when sort-code [:db/add account :pro.juxt.accounting/sort-code sort-code])]
          (remove nil?) vec
          (transact-insert conn account))))
 
@@ -141,13 +146,14 @@
   {:pre [(db? db)
          (not (nil? entity))
          (not (nil? type))]}
-  (ffirst
-   (q '[:find ?account
-        :in $ ?entity ?type
-        :where
-        [?account :pro.juxt.accounting/entity ?entity]
-        [?account :pro.juxt.accounting/account-type ?type]]
-      db (to-ref-id entity) type)))
+  (d/entity db
+            (ffirst
+             (q '[:find ?account
+                  :in $ ?entity ?type
+                  :where
+                  [?account :pro.juxt.accounting/entity ?entity]
+                  [?account :pro.juxt.accounting/account-type ?type]]
+                db (to-ref-id entity) type))))
 
 (defn assemble-transaction
   "Assemble the Datomic txdata for a financial transaction. All entries
