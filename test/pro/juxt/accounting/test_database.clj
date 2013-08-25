@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
+;; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; This file is part of JUXT Accounting.
 ;;
@@ -21,7 +21,7 @@
    [clojure.test :refer :all]
    [pro.juxt.accounting.database :refer :all]
    [datomic.api :refer (q db delete-database entity ident transact tempid) :as d]
-   [taoensso.timbre :as timbre]
+   [clojure.tools.logging :refer :all]
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)]
    [clojurewerkz.money.amounts :as ma :refer (amount-of zero?)]
    [clj-time.core :as time :refer (local-date)])
@@ -40,7 +40,7 @@
 
 (use-fixtures :each
   (fn [f]
-    (timbre/set-level! :info)
+    ;;(timbre/set-level! :info)
     (f))
   (using-temporary-database dburi))
 

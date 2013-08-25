@@ -1,6 +1,6 @@
 # JUXT Accounting
 
-Free (as in speech) double-entry book-keeping software.
+Free (as in freedom) double-entry book-keeping software.
 
 ## Introduction
 
@@ -73,9 +73,9 @@ These entries are first _assembled_ into a list before being inserted, all at on
 
 ## Pricing
 
-If you make use of the software and it becomes valuable to you, we ask that you make a one-off payment of £100 or BTC 1.00. These payments help to improve the software. Please make UK cheques payable to JUXT Ltd. and send to :-
+If you make use of the software and it becomes valuable to you, we ask that you make a one-off payment of £100 or BTC 1.00. These payments help to improve the software. Please make UK cheques payable to JUXT LTD. and send to :-
 
-    JUXT Ltd.
+    JUXT LTD.
     40 Beaufort Drive,
     Barton Seagrave.
     KETTERING. NN15 6SF
@@ -92,4 +92,4 @@ Please note that there are required system dependencies that are not included (J
 
 ## Copyright
 
-Copyright © 2013 JUXT Ltd.
+Copyright © 2013 JUXT LTD.

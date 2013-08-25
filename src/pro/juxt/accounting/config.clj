@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
+;; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; This file is part of JUXT Accounting.
 ;;

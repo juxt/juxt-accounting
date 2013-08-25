@@ -154,6 +154,13 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/pdf-file
+  :db/valueType :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/doc "The path to the PDF file where the invoice is printed to"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
   :db/ident :pro.juxt.accounting/item
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
@@ -179,6 +186,27 @@
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
   :db/doc "Output tax (UK VAT or sales tax) added to an invoice"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting/output-tax-paid
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "Output tax paid stamp (reference to VAT return entity)"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting.vat/box-6
+  :db/valueType :db.type/bigdec
+  :db/cardinality :db.cardinality/one
+  :db/doc "Amount to put into box 6 on VAT return"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :pro.juxt.accounting.vat/box-1
+  :db/valueType :db.type/bigdec
+  :db/cardinality :db.cardinality/one
+  :db/doc "Amount to put into box 1 on VAT return"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]

@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
+;; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; This file is part of JUXT Accounting.
 ;;
@@ -21,7 +21,7 @@
     [set :as set]
     [edn :as edn]]
    [clojure.java [io :refer (reader resource)]]
-   [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy)]
+   [clojure.tools.logging :refer :all]
    [datomic.api :refer (q db transact transact-async entity) :as d]
    [clojurewerkz.money.amounts :as ma :refer (total zero)])
   (:import (java.util Date)
@@ -42,6 +42,17 @@
 
 (defn entity? [e] "Is this a valid Datomic entity? (Must be a map and contain :db:id)."
   (:db/id e))
+
+(defprotocol DatabaseReference
+  (as-db [_]))
+
+(extend-protocol DatabaseReference
+  datomic.db.Db
+  (as-db [db] db)
+  datomic.Connection
+  (as-db [conn] (d/db conn))
+  java.lang.String
+  (as-db [dburi] (as-db (d/connect dburi))))
 
 (defprotocol TransactionDate
   (to-date [_]))
@@ -66,10 +77,13 @@
   (to-entity-map [em _] em)
   java.lang.Long
   (to-ref-id [id] id)
-  (to-entity-map [id db] (d/entity db id))
+  (to-entity-map [id db] (d/entity (as-db db) id))
   clojure.lang.Keyword
   (to-ref-id [k] k)
-  (to-entity-map [k db] (d/entity db k))
+  (to-entity-map [k db] (d/entity (as-db db) k))
+  java.lang.String
+  (to-ref-id [id] (to-ref-id (Long/parseLong id)))
+  (to-entity-map [id db] (to-entity-map (Long/parseLong id) db))
   )
 
 (def functions {:pro.juxt.accounting/generate-invoice-ref
@@ -93,7 +107,8 @@
     (debug "Loading schema")
     @(d/transact conn (read-string (slurp (resource "schema.edn"))))
     @(d/transact conn (read-string (slurp (resource "data.edn"))))
-    @(d/transact conn (create-functions functions))))
+    @(d/transact conn (create-functions functions))
+    conn))
 
 (defn transact-insert
   "Blocking update. Returns the entity map of the new entity."
@@ -131,7 +146,6 @@
   {:pre [(not (nil? currency))]}
   (let [account (d/tempid :db.part/user)]
     (->> [(when entity [:db/add account :pro.juxt.accounting/entity (to-ref-id entity)])
-;;          (when ident [:db/add account :db/ident ident])
           (when type [:db/add account :pro.juxt.accounting/account-type type])
           [:db/add account :pro.juxt.accounting/currency (.getCode currency)]
           (when description [:db/add account :pro.juxt/description description])
@@ -143,8 +157,7 @@
 (defn find-account
   "Find an entity's account of a given type"
   [db {:keys [entity type]}]
-  {:pre [(db? db)
-         (not (nil? entity))
+  {:pre [(not (nil? entity))
          (not (nil? type))]}
   (d/entity db
             (ffirst
@@ -153,7 +166,21 @@
                   :where
                   [?account :pro.juxt.accounting/entity ?entity]
                   [?account :pro.juxt.accounting/account-type ?type]]
-                db (to-ref-id entity) type))))
+                (as-db db) (to-ref-id entity) type))))
+
+(defn get-accounts
+  "Get all the accounts"
+  [db]
+  (map (partial zipmap [:account :entity :entity-name :entity-ident :type :currency])
+       (q '[:find ?account ?entity ?entity-name ?entity-ident ?type ?currency
+            :in $
+            :where
+            [?account :pro.juxt.accounting/entity ?entity]
+            [?entity :pro.juxt.accounting/name ?entity-name]
+            [?entity :db/ident ?entity-ident]
+            [?account :pro.juxt.accounting/account-type ?type]
+            [?account :pro.juxt.accounting/currency ?currency]]
+          (as-db db))))
 
 (defn assemble-transaction
   "Assemble the Datomic txdata for a financial transaction. All entries
@@ -204,19 +231,22 @@
      [[:db/add txid :pro.juxt.accounting/date (to-date date)]])))
 
 (defn get-entries [db account type]
-  (map (fn [[account amount currency tx entry]]
-         {:account account
-          :invoice (:pro.juxt.accounting/invoice (d/entity db entry))
+  (map (fn [[date account amount currency tx entry]]
+         {:date date
+          :account account
+          :invoice (:pro.juxt.accounting/invoice (d/entity (as-db db) entry))
           :entry entry
           :type type
           :amount (Money/of (CurrencyUnit/getInstance currency) amount)
-          :tx tx})
-       (q {:find '[?account ?amount ?currency ?tx ?entry]
+          :tx tx
+          })
+       (q {:find '[?date ?account ?amount ?currency ?tx ?entry]
            :in '[$ ?account]
            :where [['?account type '?entry]
                    '[?account :pro.juxt.accounting/currency ?currency]
                    '[?entry :pro.juxt.accounting/amount ?amount ?tx]
-                   ]} db (to-ref-id account))))
+                   '[?tx :pro.juxt.accounting/date ?date]
+                   ]} (as-db db) (to-ref-id account))))
 
 (defn get-amounts [db account type]
     (map (fn [[amount currency]] (Money/of (CurrencyUnit/getInstance currency) amount))
@@ -226,7 +256,7 @@
              :where [['?account type '?entry]
                      '[?account :pro.juxt.accounting/currency ?currency]
                      '[?entry :pro.juxt.accounting/amount ?amount]
-                     ]} db (to-ref-id account))))
+                     ]} (as-db db) (to-ref-id account))))
 
 (defn get-debits [db account]
   (get-entries db account :pro.juxt.accounting/debit))
@@ -261,3 +291,55 @@
   [db & accounts]
   (when (not-empty accounts)
     (total (map #(get-balance db %) accounts))))
+
+(defn get-invoices
+  [db]
+  (->> (q '[:find ?invoice ?invoice-ref ?entity-name ?subtotal ?output-tax ?total ?invoice-date ?issue-date
+            :in $
+            :where
+            [?entry :pro.juxt.accounting/invoice ?invoice]
+            [?invoice :pro.juxt.accounting/invoice-ref ?invoice-ref]
+            [?invoice :pro.juxt.accounting/entity ?entity]
+            [?invoice :pro.juxt.accounting/subtotal ?subtotal]
+            [?invoice :pro.juxt.accounting/output-tax ?output-tax]
+            [?invoice :pro.juxt.accounting/total ?total]
+            [?invoice :pro.juxt.accounting/invoice-date ?invoice-date]
+            [?invoice :pro.juxt.accounting/issue-date ?issue-date]
+            [?entity :pro.juxt.accounting/name ?entity-name]
+            ]
+          (as-db db))
+       (map (fn [[invoice invoice-ref entity-name subtotal output-tax total invoice-date issue-date]]
+              (let [ent (d/entity (as-db db) invoice)]
+                ;; TODO: Replace with map-map
+                {:invoice invoice
+                 :invoice-ref invoice-ref
+                 :entity-name entity-name
+                 :subtotal subtotal
+                 :output-tax output-tax
+                 :total total
+                 :invoice-date invoice-date
+                 :issue-date issue-date
+                 :output-tax-paid (:pro.juxt.accounting/output-tax-paid ent)})))
+       (sort-by :invoice-date)))
+
+(defn find-invoice-by-ref [db invoice-ref]
+  (->
+   (q '[:find ?invoice
+        :in $ ?invoice-ref
+        :where [?invoice :pro.juxt.accounting/invoice-ref ?invoice-ref]]
+      db invoice-ref)
+   ffirst
+   (to-entity-map db)))
+
+(defn get-vat-returns
+  [db]
+  (->> (q '[:find ?date ?box-1 ?box-6
+            :in $
+            :where
+            [?return :pro.juxt.accounting/date ?date]
+            [?return :pro.juxt.accounting.vat/box-1 ?box-1]
+            [?return :pro.juxt.accounting.vat/box-6 ?box-6]
+            ]
+          (as-db db))
+       (map (partial zipmap [:date :box1 :box6]))
+       (sort-by :date)))

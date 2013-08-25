@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
+;; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; This file is part of JUXT Accounting.
 ;;
@@ -16,7 +16,7 @@
 ;;
 (ns pro.juxt.accounting.invoicing
   (:require
-   [taoensso.timbre :as timbre :refer (trace debug info warn error fatal spy)]
+   [clojure.tools.logging :refer :all]
    [pro.juxt.accounting
     [database :as db]
     [util :refer (map-map)]]
@@ -117,14 +117,18 @@
          ;; Debit debit-account with total including VAT. This now needs
          ;; to be paid (within some time-frame).
          (let [txid (d/tempid :db.part/tx)]
-           (db/assemble-transaction
-            db txid
-            :date (Date.)
-            :debits {debit-account tot}
-            :credits (-> (reduce-kv (fn [m k v]
-                                      (assoc m k (total (map :amount entries))))
-                                    {} (group-by :account entries))
-                         (assoc output-tax-account output-tax))))))))))
+           (concat
+            (list
+             [:db/add txid :pro.juxt/description (format "Invoicing %s (%s)" (:pro.juxt.accounting/name (db/to-entity-map entity db))
+                                                         (.format (java.text.SimpleDateFormat. "d MMM y") (db/to-date invoice-date)))])
+            (db/assemble-transaction
+             db txid
+             :date (db/to-date invoice-date)
+             :debits {debit-account tot}
+             :credits (-> (reduce-kv (fn [m k v]
+                                       (assoc m k (total (map :amount entries))))
+                                     {} (group-by :account entries))
+                          (assoc output-tax-account output-tax)))))))))))
 
 ;; TODO This isn't really issuing the invoice because that's only when
 ;; it's been actually posted - rename accordingly
@@ -193,11 +197,10 @@
             :amount (fn [item] (str (.getSymbol (CurrencyUnit/getInstance (:currency item)))
                                     (str (:amount item))))}))
 
-(defn print-invoice [{:keys [items subtotal vat total
-                             invoice-date issue-date
+(defn print-invoice [{:keys [items subtotal vat total invoice-date issue-date
                              invoice-ref invoice-addressee invoice-address
-                             client-name
-                             issuer currency purchase-order-reference output-tax-rate]} out]
+                             client-name issuer currency purchase-order-reference
+                             output-tax-rate]} out]
   (let [currency-symbol (.getSymbol (CurrencyUnit/getInstance currency))]
     (pdf
      [{:size :a4 :pages true}
@@ -205,9 +208,7 @@
        [[:cell {:align :left :border false :set-border [:bottom]}
          [:phrase {:size 20} "INVOICE"]]
         [:cell {:align :right :border false :set-border [:bottom]}
-         [:chunk (apply str (conj (vec (interpose "\n" (cons (-> issuer :company-name) (-> issuer :company-address)))) "\n\n"))]
-         ]
-        ]
+         [:chunk (apply str (conj (vec (interpose "\n" (cons (-> issuer :company-name) (-> issuer :company-address)))) "\n\n"))]]]
 
        [[:cell {:colspan 2 :border false} [:spacer 1]]]
 
@@ -297,7 +298,8 @@
                  :invoice-addressee :pro.juxt.accounting/invoice-addressee
                  :invoice-address (comp edn/read-string :pro.juxt.accounting/invoice-address)})
        (map-map invoice
-                {:invoice-ref :pro.juxt.accounting/invoice-ref
+                {:invoice :db/id
+                 :invoice-ref :pro.juxt.accounting/invoice-ref
                  :invoice-date (comp #(DateTime. %) :pro.juxt.accounting/invoice-date)
                  :issue-date (comp #(DateTime. %) :pro.juxt.accounting/issue-date)
                  :items (fn [invoice] (get-invoice-items invoice db))
@@ -308,14 +310,15 @@
                  :purchase-order-reference :pro.juxt.accounting/purchase-order-reference
                  })))))
 
-(defn generate-pdf-for-invoice [{:keys [invoice-ref ^File output-path] :as invoice-data}]
+(defn generate-pdf-for-invoice [conn {:keys [invoice invoice-ref ^File output-path] :as invoice-data}]
   {:pre [(not (nil? invoice-ref))
          (not (nil? output-path))]}
   (let [f (file output-path)]
     (info "Printing PDF invoice to " f)
     (print-invoice invoice-data (FileOutputStream. f))
+    @(d/transact conn [[:db/add invoice :pro.juxt.accounting/pdf-file output-path]])
     #_(if (.exists f)
-      (info "PDF invoice already exists, so will not overwrite: " f)
-      (do
-        (info "Printing PDF invoice to " f)
-        (print-invoice invoice-data (FileOutputStream. f))))))
+        (info "PDF invoice already exists, so will not overwrite: " f)
+        (do
+          (info "Printing PDF invoice to " f)
+          (print-invoice invoice-data (FileOutputStream. f))))))

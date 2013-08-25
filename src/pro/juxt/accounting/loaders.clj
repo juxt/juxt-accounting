@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
+;; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; This file is part of JUXT Accounting.
 ;;
@@ -35,6 +35,29 @@
    :metadata {:pro.juxt/description (:description billing)}
    })
 
+(defn expenses [db context billing]
+  (let [amount (ma/parse (:amount billing))]
+    (let [m
+          {:date (:date billing)
+           :debits {(account-of db (:debit-account context)) amount}
+           :credits {(account-of db (:credit-account context)) amount}
+           :metadata {:pro.juxt/description (:description billing)}
+           ;; TODO: Get expense type/code, or infer it from description
+           }]
+      (if-let [entity (:client billing)]
+        (-> m
+            (assoc-in [:debits
+                        (account-of db (:credit-account context))] amount)
+            (assoc-in [:credits
+                        (account-of db
+                                    {:entity entity
+                                     :type :pro.juxt.accounting/expenses})] amount)
+            )
+        m
+        )
+      )))
+
+
 (defn daily-rate-billing [db context billing]
   {:date (:date billing)
    :debits {(account-of db (:debit-account context)) (amount-of GBP (:rate billing))}
@@ -50,7 +73,6 @@
                    })
 
 (defn variable-rate-billing [db context {:keys [date type description hours] :as billing}]
-  (println "context is " context)
   (let [amt (or
              (-> context :rates type)
              (when (= type :work-from-home-hourly) (* hours (-> context :rates :per-hour))))
@@ -64,5 +86,23 @@
                                            (when hours
                                              (format " - %s hours worked"
                                                      (.format (java.text.DecimalFormat. "#.##")
-                                                              (float hours)))))}
-     }))
+                                                              (float hours)))))}}))
+
+
+(defn natwest-tsv [db context record]
+  (let [credit (cond (= "-" (.trim (:credit record))) 0
+                     :otherwise (.parse (java.text.DecimalFormat.) (:credit record)))
+        debit (cond (= "-" (.trim (:debit record))) 0
+                    :otherwise (.parse (java.text.DecimalFormat.) (:debit record)))]
+    (cond->
+     {:date (.parse (java.text.SimpleDateFormat. "dd MMM y z") (str (:date record) " UTC"))
+      :metadata {:pro.juxt/description (:description record)}
+      :credits {}
+      :debits {}
+      }
+     (and (pos? debit) (re-matches #".*LIKELY LTD.*" (:description record)))
+     (-> (assoc-in [:credits (account-of db {:entity :likely :type :pro.juxt.accounting/invoiced})] (amount-of GBP debit))
+         (assoc-in [:debits (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})] (amount-of GBP debit)))
+     (and (pos? credit) (re-matches #".*HMRC VAT.*" (:description record)))
+     (-> (assoc-in [:credits (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})] (amount-of GBP credit))
+         (assoc-in [:debits (account-of db {:entity :congreve :type :pro.juxt.accounting/vat-owing})] (amount-of GBP credit))))))

@@ -1,3 +1,4 @@
+;; is this needed?
 [
  {:db/id #db/id[:db.part/user -1]
   :db/ident :pro.juxt.accounting.standard-transactions/consulting-full-day

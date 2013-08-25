@@ -1,4 +1,4 @@
-;; Copyright © 2013, JUXT Ltd. All Rights Reserved.
+;; Copyright © 2013, JUXT LTD. All Rights Reserved.
 ;;
 ;; This file is part of JUXT Accounting.
 ;;
@@ -14,7 +14,9 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns pro.juxt.accounting.util)
+(ns pro.juxt.accounting.util
+  (:require
+   [datomic.api :as d]))
 
 (defn map-map
   "Map (verb) a map (noun). Create a map from a value by applying the

@@ -11,7 +11,7 @@
             '[:find ?np :in $ ?prefix ?init
               :where
               [_ :pro.juxt.accounting/invoice-ref ?ref]
-              [(.startsWith ?ref ?prefix)]
+              [(.startsWith ^String ?ref ?prefix)]
               [(count ?prefix) ?len]
               [(.substring ^String ?ref ?len) ?s]
               [(Integer/parseInt ?s) ?si]
