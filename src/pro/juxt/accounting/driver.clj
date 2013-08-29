@@ -56,7 +56,7 @@
                  (db/assemble-transaction
                   db txid
                   (or (:date bookentry) (:date billing))
-                  [(select-keys bookentry [:debit-account :credit-account :amount])]))))))))))
+                  [(select-keys bookentry [:debit-account :credit-account :amount :description])]))))))))))
 
 (defn process-accounts-file [path dburi]
   (let [fl (file path)

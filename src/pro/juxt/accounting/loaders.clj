@@ -21,8 +21,7 @@
    [pro.juxt.accounting.database :as db]
    [clojurewerkz.money.amounts :as ma :refer (amount-of)]
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)])
-  (:import (org.joda.money Money CurrencyUnit))
-  )
+  (:import (org.joda.money Money CurrencyUnit)))
 
 (defn account-of [db m]
   {:post [(not (nil? %))]}
@@ -32,41 +31,36 @@
 
 (defn training [db context billing]
   {:date (:date billing)
-   :debits {(account-of db (:debit-account context)) (amount-of GBP (:amount-ex-vat billing))}
-   :credits {(account-of db (:credit-account context)) (amount-of GBP (:amount-ex-vat billing))}
-   :metadata {:pro.juxt/description (:description billing)}
-   })
+   :amount (amount-of GBP (:amount-ex-vat billing))
+   :debit-account (account-of db (:debit-account context))
+   :credit-account (account-of db (:credit-account context))
+   :description (:description billing)})
 
 (defn expenses [db context billing]
   (let [amount (ma/parse (:amount billing))]
     (let [m
           {:date (:date billing)
-           :debits {(account-of db (:debit-account context)) amount}
-           :credits {(account-of db (:credit-account context)) amount}
-           :metadata {:pro.juxt/description (:description billing)}
+           :debit-account (:debit-account context)
+           :credit-account (account-of db (:credit-account context))
+           :amount amount
+           :description (:description billing)
            ;; TODO: Get expense type/code, or infer it from description
            }]
       (if-let [entity (:client billing)]
         (-> m
-            (assoc-in [:debits
-                        (account-of db (:credit-account context))] amount)
-            (assoc-in [:credits
-                        (account-of db
+            (assoc m
+              :debit-account (account-of db (:credit-account context))
+              :credit-account (account-of db
                                     {:entity entity
-                                     :type :pro.juxt.accounting/expenses})] amount)
-            )
-        m
-        )
-      )))
-
+                                     :type :pro.juxt.accounting/expenses})))
+        m))))
 
 (defn daily-rate-billing [db context billing]
   {:date (:date billing)
-   :debits {(account-of db (:debit-account context)) (amount-of GBP (:rate billing))}
-   :credits {(account-of db (:credit-account context)) (amount-of GBP (:rate billing))}
-   :metadata {:pro.juxt/description (:description billing)}
-   })
-
+   :amount (amount-of GBP (:rate billing))
+   :debit-account (account-of db (:debit-account context))
+   :credit-account (account-of db (:credit-account context))
+   :description (:description billing)})
 
 (def descriptions {:full-day-with-travel "Full day (with travel)"
                    :full-day-from-home "Full day (working remotely)"
@@ -84,12 +78,12 @@
      :debit-account (account-of db (:debit-account context))
      :credit-account (account-of db (:credit-account context))
      :amount amount
-     :metadata {:pro.juxt/description (str (get descriptions type)
+     :description (str (get descriptions type)
                                            (when description (str " - " description))
                                            (when hours
                                              (format " - %s hours worked"
                                                      (.format (java.text.DecimalFormat. "#.##")
-                                                              (float hours)))))}}))
+                                                              (float hours)))))}))
 
 
 (defn natwest-tsv [db context record]
@@ -98,8 +92,7 @@
         debit (cond (= "-" (.trim (:debit record))) 0
                     :otherwise (.parse (java.text.DecimalFormat.) (:debit record)))
         fields {:date (.parse (java.text.SimpleDateFormat. "dd MMM y z") (str (:date record) " UTC"))
-                :metadata {:pro.juxt/description (:description record)}}
-        ]
+                :description (:description record)}]
 
     (when-let [fields2
                (cond

@@ -204,6 +204,7 @@
          (every? (comp not empty?) transactions)
          (every? map? transactions)
          (every? (comp (partial instance? Money) :amount) transactions)
+         (every? (comp string? :description) transactions)
          ]}
 
   ;; Check that all amounts are in the same currency as their
@@ -222,16 +223,17 @@
 
   (concat
    (apply concat
-          (for [{:keys [debit-account credit-account ^Money amount]} transactions]
+          (for [{:keys [debit-account credit-account ^Money amount ^String description]} transactions]
             (let [node (d/tempid :db.part/user)]
               [[:db/add (to-ref-id debit-account) :pro.juxt.accounting/debit node]
                [:db/add (to-ref-id credit-account) :pro.juxt.accounting/credit node]
                [:db/add node :pro.juxt.accounting/amount (.getAmount amount)]
-               [:db/add node :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]])))
+               [:db/add node :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]
+               [:db/add node :pro.juxt/description description]])))
    [[:db/add txid :pro.juxt.accounting/date (to-date date)]]))
 
 (defn get-entries [db account type]
-  (map (fn [[date account amount currency tx entry]]
+  (map (fn [[date account amount currency tx entry description]]
          {:date date
           :account account
           :invoice (:pro.juxt.accounting/invoice (d/entity (as-db db) entry))
@@ -239,12 +241,14 @@
           :type type
           :amount (Money/of (CurrencyUnit/getInstance currency) amount)
           :tx tx
+          :description description
           })
-       (q {:find '[?date ?account ?amount ?currency ?tx ?entry]
+       (q {:find '[?date ?account ?amount ?currency ?tx ?entry ?description]
            :in '[$ ?account]
            :where [['?account type '?entry]
                    '[?account :pro.juxt.accounting/currency ?currency]
                    '[?entry :pro.juxt.accounting/amount ?amount ?tx]
+                   '[?entry :pro.juxt/description ?description]
                    '[?tx :pro.juxt.accounting/date ?date]
                    ]} (as-db db) (to-ref-id account))))
 

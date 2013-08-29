@@ -16,6 +16,8 @@
 ;;
 (ns pro.juxt.accounting.service
   (:require
+   [clojure.tools
+    [trace :refer (deftrace)]]
    [io.pedestal.service.http :as bootstrap]
    [io.pedestal.service.interceptor :refer (defbefore defhandler on-request defon-request definterceptorfn before)]
    [io.pedestal.service.http.route :as route]
@@ -159,9 +161,9 @@
   {:pre [(instance? java.util.Date d)]}
   (.format (java.text.SimpleDateFormat. "y-MM-dd") d))
 
-(defn to-ledger-view [db entries]
+(deftrace to-ledger-view [db entries]
   (->> entries (sort-by :date)
-       (map #(assoc % :description (:pro.juxt/description (d/entity db (:tx %)))))
+       ;;(map #(assoc % :description (:pro.juxt/description %)))
        (map #(dissoc % :account :tx :entry :type :invoice))
        (to-table {:column-order (explicit-column-order :date :description :amount)
                   :formatters {:amount #(moneyformat % java.util.Locale/UK)

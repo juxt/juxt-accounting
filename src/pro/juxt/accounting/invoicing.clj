@@ -104,7 +104,7 @@
                      [:db/add id :pro.juxt.accounting/debit entry]
                      [:db/add entry :pro.juxt.accounting/invoice invoice]
                      [:db/add id :pro.juxt.accounting/date (:pro.juxt.accounting/date tx)]
-                     [:db/add id :pro.juxt/description (:pro.juxt/description tx)]
+                     ;;[:db/add id :pro.juxt/description (:pro.juxt/description tx)]
                      [:db/add id :pro.juxt.accounting/amount (.getAmount amount)]
                      [:db/add id :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]])))
 
@@ -116,21 +116,18 @@
 
          ;; Debit debit-account with total including VAT. This now needs
          ;; to be paid (within some time-frame).
-         (let [txid (d/tempid :db.part/tx)]
-           (concat
-            (list
-             [:db/add txid :pro.juxt/description (format "Invoicing %s (%s)" (:pro.juxt.accounting/name (db/to-entity-map entity db))
-                                                         (.format (java.text.SimpleDateFormat. "d MMM y") (db/to-date invoice-date)))])
-            (db/assemble-transaction
-             db txid
-             (db/to-date invoice-date)
-
-             (for [[credit-account amount]
-                   (-> (reduce-kv (fn [m k v]
-                                    (assoc m k (total (map :amount entries))))
-                                  {} (group-by :account entries))
-                       (assoc output-tax-account output-tax))]
-               {:amount amount :debit-account debit-account :credit-account credit-account}))))))))))
+         (let [txid (d/tempid :db.part/tx)
+               description (format "Invoicing %s (%s)" (:pro.juxt.accounting/name (db/to-entity-map entity db))
+                                   (.format (java.text.SimpleDateFormat. "d MMM y") (db/to-date invoice-date)))]
+           (db/assemble-transaction
+            db txid
+            (db/to-date invoice-date)
+            (concat
+             (for [[credit-account amount] (reduce-kv (fn [m k v]
+                                                        (assoc m k (total (map :amount entries))))
+                                                      {} (group-by :account entries))]
+               {:amount amount :debit-account debit-account :credit-account credit-account :description description})
+             [{:amount output-tax :debit-account debit-account :credit-account output-tax-account :description "VAT"}])))))))))
 
 
 ;; TODO This isn't really issuing the invoice because that's only when
