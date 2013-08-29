@@ -46,18 +46,17 @@
                         "application/edn" (edn/read-string (slurp billing-file))
                         "text/tab-separated-values" (map (partial zipmap columns) (map #(str/split % #"\t") (line-seq (io/reader billing-file)))))]
         (let [bookentry (ldr db args billing)] ; should ldr be called transformer?
-          @(d/transact
-            conn
-            (let [txid (d/tempid :db.part/tx)]
-              (concat
-               (for [[n v] (:metadata bookentry)]
-                 [:db/add txid n v])
-               (db/assemble-transaction
-                db txid
-                :date (or (:date bookentry) (:date billing))
-                :debits (:debits bookentry)
-                :credits (:credits bookentry)))))))
-      )))
+          (when bookentry
+            @(d/transact
+              conn
+              (let [txid (d/tempid :db.part/tx)]
+                (concat
+                 (for [[n v] (:metadata bookentry)]
+                   [:db/add txid n v])
+                 (db/assemble-transaction
+                  db txid
+                  (or (:date bookentry) (:date billing))
+                  [(select-keys bookentry [:debit-account :credit-account :amount])]))))))))))
 
 (defn process-accounts-file [path dburi]
   (let [fl (file path)
@@ -150,7 +149,7 @@
           (invoicing/generate-pdf-for-invoice conn invoice-data)
           ))
 
-      (doseq [{:keys [entity vat-account credit-account frs-credit-account date frs-rate]} vat-returns]
+      #_(doseq [{:keys [entity vat-account credit-account frs-credit-account date frs-rate]} vat-returns]
         (let [get-time (fn [d] (.getTime d))]
           ;; Get invoices for last 3 month period that haven't already been paid
           (debugf "VAT return - date is %s" (.getTime (db/to-date date)))
@@ -216,6 +215,4 @@
                       :credits {(db/find-account db {:entity entity :type credit-account})
                                 owing
                                 (db/find-account db {:entity entity :type frs-credit-account})
-                                keep}))))))
-
-            ))))))
+                                keep}))))))))))))

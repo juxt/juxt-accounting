@@ -123,12 +123,15 @@
                                                          (.format (java.text.SimpleDateFormat. "d MMM y") (db/to-date invoice-date)))])
             (db/assemble-transaction
              db txid
-             :date (db/to-date invoice-date)
-             :debits {debit-account tot}
-             :credits (-> (reduce-kv (fn [m k v]
-                                       (assoc m k (total (map :amount entries))))
-                                     {} (group-by :account entries))
-                          (assoc output-tax-account output-tax)))))))))))
+             (db/to-date invoice-date)
+
+             (for [[credit-account amount]
+                   (-> (reduce-kv (fn [m k v]
+                                    (assoc m k (total (map :amount entries))))
+                                  {} (group-by :account entries))
+                       (assoc output-tax-account output-tax))]
+               {:amount amount :debit-account debit-account :credit-account credit-account}))))))))))
+
 
 ;; TODO This isn't really issuing the invoice because that's only when
 ;; it's been actually posted - rename accordingly

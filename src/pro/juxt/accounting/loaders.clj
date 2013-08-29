@@ -16,6 +16,8 @@
 ;;
 (ns pro.juxt.accounting.loaders
   (:require
+   [clojure.tools
+    [trace :refer (deftrace)]]
    [pro.juxt.accounting.database :as db]
    [clojurewerkz.money.amounts :as ma :refer (amount-of)]
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)])
@@ -79,8 +81,9 @@
         _ (assert (not (nil? amt)) (str billing))
         amount (amount-of GBP amt java.math.RoundingMode/DOWN)]
     {:date date
-     :debits {(account-of db (:debit-account context)) amount}
-     :credits {(account-of db (:credit-account context)) amount}
+     :debit-account (account-of db (:debit-account context))
+     :credit-account (account-of db (:credit-account context))
+     :amount amount
      :metadata {:pro.juxt/description (str (get descriptions type)
                                            (when description (str " - " description))
                                            (when hours
@@ -93,16 +96,22 @@
   (let [credit (cond (= "-" (.trim (:credit record))) 0
                      :otherwise (.parse (java.text.DecimalFormat.) (:credit record)))
         debit (cond (= "-" (.trim (:debit record))) 0
-                    :otherwise (.parse (java.text.DecimalFormat.) (:debit record)))]
-    (cond->
-     {:date (.parse (java.text.SimpleDateFormat. "dd MMM y z") (str (:date record) " UTC"))
-      :metadata {:pro.juxt/description (:description record)}
-      :credits {}
-      :debits {}
-      }
-     (and (pos? debit) (re-matches #".*LIKELY LTD.*" (:description record)))
-     (-> (assoc-in [:credits (account-of db {:entity :likely :type :pro.juxt.accounting/invoiced})] (amount-of GBP debit))
-         (assoc-in [:debits (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})] (amount-of GBP debit)))
-     (and (pos? credit) (re-matches #".*HMRC VAT.*" (:description record)))
-     (-> (assoc-in [:credits (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})] (amount-of GBP credit))
-         (assoc-in [:debits (account-of db {:entity :congreve :type :pro.juxt.accounting/vat-owing})] (amount-of GBP credit))))))
+                    :otherwise (.parse (java.text.DecimalFormat.) (:debit record)))
+        fields {:date (.parse (java.text.SimpleDateFormat. "dd MMM y z") (str (:date record) " UTC"))
+                :metadata {:pro.juxt/description (:description record)}}
+        ]
+
+    (when-let [fields2
+               (cond
+                (and (pos? debit) (re-matches #".*LIKELY LTD.*" (:description record)))
+                (assoc {}
+                  :credit-account (account-of db {:entity :likely :type :pro.juxt.accounting/invoiced})
+                  :debit-account (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})
+                  :amount (amount-of GBP debit))
+
+                (and (pos? credit) (re-matches #".*HMRC VAT.*" (:description record)))
+                (assoc {}
+                  :credit-account (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})
+                  :debit-account (account-of db {:entity :congreve :type :pro.juxt.accounting/vat-owing})
+                  :amount (amount-of GBP credit)))]
+      (merge fields fields2))))

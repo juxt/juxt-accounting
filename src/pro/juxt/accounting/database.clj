@@ -19,7 +19,10 @@
   (:require
    [clojure
     [set :as set]
-    [edn :as edn]]
+    [edn :as edn]
+    ]
+   [clojure.tools
+    [trace :refer (deftrace)]]
    [clojure.java [io :refer (reader resource)]]
    [clojure.tools.logging :refer :all]
    [datomic.api :refer (q db transact transact-async entity) :as d]
@@ -182,53 +185,50 @@
             [?account :pro.juxt.accounting/currency ?currency]]
           (as-db db))))
 
+;; For example
+;; {:debit-account :foo :credit-account :bar :amount (Money/parse "GBP 20")}
 (defn assemble-transaction
   "Assemble the Datomic txdata for a financial transaction. All entries
   in the accounting system are created via this function. It is
-  responsible for ensuring that the debits and credits balance, thereby
-  ensuring that all the accounts balance. The given txid should be a key generated from the :db.part/tx partition."
-  [db txid & {:keys [date debits credits]}]
-  {:pre [(db? db)
+  responsible for checking that the debits and credits balance, thereby
+  ensuring that all the accounts balance. The given txid should be a key
+  generated from the :db.part/tx partition. Each entry pair is a vector
+  containing a debit and a credit. Each debit/credit is a map with keys
+  for the account and Money amount."
+  [db txid date transactions]
+  {:pre [(pos? (count transactions))
+         (db? db)
          (not (nil? date))
          (instance? Date (to-date date))
-         (map? debits)
-         (map? credits)
-         (every? (partial instance? Money) (concat (vals debits) (vals credits)))]}
-  ;; Check that all credits and of the same currency
-  (doseq [[account amount] (concat (seq debits) (seq credits))]
-    (when-not (= (.getCode (.getCurrencyUnit amount))
-                 (:pro.juxt.accounting/currency (to-entity-map account db)))
-      (cond (nil? (:pro.juxt.accounting/currency (to-entity-map account db)))
-            (throw (ex-info (str "Account " (to-ref-id account) " not found or has no associated currency") {:account (to-ref-id account)}))
-            :otherwise
-            (throw (ex-info "Entry amount is in a different currency to that of the account"
-                            {:entry-currency (.getCurrencyUnit amount)
-                             :account-currency (:pro.juxt.accounting/currency (to-entity-map account db))})))))
+         (coll? transactions)
+         (every? (comp not empty?) transactions)
+         (every? map? transactions)
+         (every? (comp (partial instance? Money) :amount) transactions)
+         ]}
 
-  ;; This important guard is only for when there is a single currency across all entries
-  ;; Multi-FX transactions can't be checked in this way so are simply accepted.
-  (when (= 1 (count (distinct (map (fn [[_ amount]] (.getCurrencyUnit amount)) (concat (seq debits) (seq credits))))))
-    (cond (zero? (count debits))
-          (throw (ex-info "Debits must contain one or more entries" {}))
-          (zero? (count credits))
-          (throw (ex-info "Credits must contain one or more entries" {}))
-          (not= (total (vals debits)) (total (vals credits)))
-          (throw (ex-info "Debits do not balance with credits" {:debit-total (total (vals debits))
-                                                                :debits (vals debits)
-                                                                :credit-total (total (vals credits))
-                                                                :credits (vals credits)})))
-    (concat
-     (apply concat
-            (for [[^long account ^Money amount] debits]
-              (let [entry (d/tempid :db.part/user)]
-                [[:db/add (to-ref-id account) :pro.juxt.accounting/debit entry]
-                 [:db/add entry :pro.juxt.accounting/amount (.getAmount amount)]])))
-     (apply concat
-            (for [[^long account ^Money amount] credits]
-              (let [entry (d/tempid :db.part/user)]
-                [[:db/add (to-ref-id account) :pro.juxt.accounting/credit entry]
-                 [:db/add entry :pro.juxt.accounting/amount (.getAmount amount)]])))
-     [[:db/add txid :pro.juxt.accounting/date (to-date date)]])))
+  ;; Check that all amounts are in the same currency as their
+  ;; corresponding credit and debit accounts
+
+  ;; TODO, or if they are in different currencies, record the fxrate as
+  ;; an fxrate attribute in the double-entry entity.
+  (doseq [{:keys [debit-account credit-account amount]} transactions]
+    (when-not (= (.getCode (.getCurrencyUnit amount))
+                 (:pro.juxt.accounting/currency (to-entity-map debit-account db))
+                 (:pro.juxt.accounting/currency (to-entity-map credit-account db)))
+      (throw (ex-info "Entry amount is in a different currency to that of the account"
+                      {:amount-currency (.getCurrencyUnit amount)
+                       :debit-account-currency (:pro.juxt.accounting/currency (to-entity-map debit-account db))
+                       :credit-account-currency (:pro.juxt.accounting/currency (to-entity-map credit-account db))}))))
+
+  (concat
+   (apply concat
+          (for [{:keys [debit-account credit-account ^Money amount]} transactions]
+            (let [node (d/tempid :db.part/user)]
+              [[:db/add (to-ref-id debit-account) :pro.juxt.accounting/debit node]
+               [:db/add (to-ref-id credit-account) :pro.juxt.accounting/credit node]
+               [:db/add node :pro.juxt.accounting/amount (.getAmount amount)]
+               [:db/add node :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]])))
+   [[:db/add txid :pro.juxt.accounting/date (to-date date)]]))
 
 (defn get-entries [db account type]
   (map (fn [[date account amount currency tx entry]]
