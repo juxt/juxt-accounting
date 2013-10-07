@@ -47,12 +47,11 @@
            ;; TODO: Get expense type/code, or infer it from description
            }]
       (if-let [entity (:client billing)]
-        (-> m
-            (assoc m
-              :debit-account (account-of db (:credit-account context))
-              :credit-account (account-of db
-                                    {:entity entity
-                                     :type :pro.juxt.accounting/expenses})))
+        (assoc m
+          :debit-account (account-of db (:credit-account context))
+          :credit-account (account-of db
+                                      {:entity entity
+                                       :type :pro.juxt.accounting/expenses}))
         m))))
 
 (defn daily-rate-billing [db context billing]
