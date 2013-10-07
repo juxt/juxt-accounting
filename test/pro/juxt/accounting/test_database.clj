@@ -16,7 +16,7 @@
 ;;
 (ns pro.juxt.accounting.test-database
   "Testing the database functions."
-  (:refer-clojure :exclude [zero?])
+  (:refer-clojure :exclude [zero? read-string])
   (:require
    [clojure.test :refer :all]
    [pro.juxt.accounting.database :refer :all]

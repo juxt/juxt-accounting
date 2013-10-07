@@ -104,6 +104,15 @@
       :db/doc doc
       :db/fn (d/function {:lang "clojure" :params params :code (slurp (resource path))})})))
 
+(defn read-string [s]
+  ;; We can't guarentee that Datomic was in the classpath when Clojure
+  ;; was loaded, so these bindings may not have been picked up.
+  (edn/read-string
+   {:readers {'db/id datomic.db/id-literal
+              'db/fn datomic.function/construct
+              'base64 datomic.codec/base-64-literal}}
+   s))
+
 (defn init [dburi]
   (if (d/create-database dburi)
     (debug "Created database" dburi)
