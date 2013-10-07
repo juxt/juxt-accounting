@@ -34,7 +34,8 @@
                  :port 9797
                  :prompt (fn [ns] (str "JUXT Accounting: [" ns "]> "))}
 
-  :profiles {:dev {:source-paths ["dev"]
+  :profiles {:dev { ;; :source-paths ["dev" "jig"] ; Including dev messes with up the user namespace - Jig should be careful to avoid loading user.clj and perhaps automatically disable it using Stuart's existing feature for disabling namespaces
+                   :source-paths ["jig"]
                    :dependencies [[org.clojure/tools.namespace "0.2.4"]
                                   [org.clojure/java.classpath "0.2.0"]]}}
 
