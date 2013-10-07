@@ -32,7 +32,8 @@
 (deftype Database [config]
   Lifecycle
   (init [_ system]
-    (infof "Initialising Database component, config is %s" config)
+    (infof "Initialising Database component, config is %s"
+           (select-keys config [:db :accounts-file]))
     (db/init (-> config :db :uri))
     system)
   (start [_ system]
@@ -41,15 +42,17 @@
     system)
   (stop [_ system]
     (d/delete-database (-> config :db :uri))
+;; There are Datomic API calls to release resources, which have been investigated in order to see if they fix the classloading issues.
+;;    (d/shutdown false)
     system))
 
 (deftype PedestalService [config]
   Lifecycle
   (init [_ system]
-    (infof "Initialising PedestalService component")
+    (infof "Initialising PedestalService component: %s" (:jig/id config))
     (-> system
         (assoc-in [(:jig/id config) :data]
-                  (get-in system [:jig/config (:pro.juxt.accounting/data config)]))
+                  (get-in system [:jig/config :jig/components (:pro.juxt.accounting/data config)]))
         (add-routes config (create-routes-terse system))))
   (start [_ system] system)
   (stop [_ system] system))
