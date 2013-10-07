@@ -16,6 +16,7 @@
 ;;
 (ns pro.juxt.accounting.database
   "Database access functions."
+  (:refer-clojure :exclude (read-string))
   (:require
    [clojure
     [set :as set]
