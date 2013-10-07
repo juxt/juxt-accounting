@@ -59,7 +59,7 @@
       (menu ~url-for)
       ~@body
       [:hr {:align :center}]
-      [:p "Data sourced from " [:code (get-in ~system [:jig/config :components (:pro.juxt.accounting/data ~component) :accounts-file])]]
+      [:p "Data sourced from " [:code (get-in ~system [:jig/config :jig/components (:pro.juxt.accounting/data ~component) :accounts-file])]]
       ;;[:p "Component is " [:pre (with-out-str (pprint ~component))]]
       ;;[:p "System is " [:pre (with-out-str (pprint ~system))]]
       ]]))
@@ -129,10 +129,10 @@
   (fn [x] (count (take-while (comp not (partial = x)) keys))))
 
 (defn get-dburi [context]
-  (get-in (:system context) [:jig/config :components (:pro.juxt.accounting/data (:component context)) :db :uri]))
+  (get-in (:system context) [:jig/config :jig/components (:pro.juxt.accounting/data (:component context)) :db :uri]))
 
 (defbefore accounts-page
-  [{:keys [request system url-for] :as context}]
+  [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
     (assoc context :response
@@ -140,6 +140,7 @@
             (html {:title "Accounts"
                    :system system
                    :url-for url-for
+                   :component component
                    }
              [:h2 "Accounts"]
              (let [accounts (db/get-accounts db)]
@@ -202,14 +203,15 @@
                [:p "Total credit: " (moneyformat (db/get-total-credit db account) java.util.Locale/UK)]))))))
 
 (defbefore invoices-page
-  [{:keys [request system url-for] :as context}]
+  [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
     (assoc context :response
            (ring-resp/response
             (html {:title "Invoices"
                    :system system
-                   :url-for url-for}
+                   :url-for url-for
+                   :component component}
              [:h2 "Invoices"]
              (let [invoices (db/get-invoices db)]
                (->> invoices
@@ -241,7 +243,7 @@
                (ring-resp/content-type "application/pdf")))))
 
 (defbefore vat-returns-page
-  [{:keys [request system url-for] :as context}]
+  [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
     (assoc context :response
@@ -249,6 +251,7 @@
             (html {:title "VAT Returns"
                    :system system
                    :url-for url-for
+                   :component component
                    }
              [:h2 "VAT Returns"]
              (let [returns (db/get-vat-returns db)]
