@@ -41,7 +41,26 @@
 (defn conn?
   "Check type is a Datomic connection. Useful for pre and post conditions."
   [conn]
-  (instance? datomic.Connection conn))
+  #_(infof "is instance? %s, type is %s" (instance? datomic.Connection conn) (type conn))
+  #_(infof "classloader of instance %s: \n%s"
+         (.getClassLoader (class conn))
+         (apply str (interpose "\n" (remove #(.endsWith (str %) ".jar") (.getURLs (.getClassLoader (class conn)))))))
+
+  #_(infof "classloader of type %s: \n%s"
+         (.getClassLoader datomic.Connection)
+         (apply str (interpose "\n" (remove #(.endsWith (str %) ".jar") (.getURLs (.getClassLoader (class conn)))))))
+
+  ;; There's a problem with Datomic caching connections, such that new
+  ;; connection instances are returned from the old classloader.
+
+  ;; See this for very useful information: http://immutant.org/news/2012/05/18/runtime-isolation/
+
+  ;; http://dev.clojure.org/jira/browse/CLJ-1125
+  ;; http://wiki.apache.org/tomcat/MemoryLeakProtection
+
+  (instance? datomic.Connection conn)
+  ) ; old: for now, we could try loading the class through the context classloader?
+
 
 (def id? "Is this a valid Datomic id? (Must be positive). Useful for assertions."
   (every-pred number? pos?))
@@ -194,6 +213,11 @@
   [db {:keys [entity type]}]
   {:pre [(not (nil? entity))
          (not (nil? type))]}
+  ;;(infof "DatabaseReference: %s" DatabaseReference)
+  ;;(infof "datomic.db.Db classloader: %s" (.getClassLoader datomic.db.Db))
+  #_(infof "DatabaseReference impls datomic.db.Db classloader: %s" (.getClassLoader (-> (into {} DatabaseReference)
+                                                                                      :impls keys first)))
+  #_(infof "datomic.db.Db class loader is %s" (.getClassLoader datomic.db.Db))
   (d/entity db
             (ffirst
              (q '[:find ?account
