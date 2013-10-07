@@ -26,9 +26,11 @@
    [clojure.java [io :refer (reader resource)]]
    [clojure.tools.logging :refer :all]
    [datomic.api :refer (q db transact transact-async entity) :as d]
-   [clojurewerkz.money.amounts :as ma :refer (total zero)])
+   [clojurewerkz.money.amounts :as ma :refer (total zero)]
+   [pro.juxt.accounting.money :refer (as-money)])
   (:import (java.util Date)
            (org.joda.money Money CurrencyUnit)))
+
 
 (defn db?
   "Check type is a Datomic database value. Useful for pre and post conditions."
@@ -203,7 +205,6 @@
          (coll? transactions)
          (every? (comp not empty?) transactions)
          (every? map? transactions)
-         (every? (comp (partial instance? Money) :amount) transactions)
          (every? (comp string? :description) transactions)
          ]}
 
@@ -213,18 +214,17 @@
   ;; TODO, or if they are in different currencies, record the fxrate as
   ;; an fxrate attribute in the double-entry entity.
   (doseq [{:keys [debit-account credit-account amount]} transactions]
-    (when-not (= (.getCode (.getCurrencyUnit amount))
-                 (:pro.juxt.accounting/currency (to-entity-map debit-account db))
+    (when-not (= (:pro.juxt.accounting/currency (to-entity-map debit-account db))
                  (:pro.juxt.accounting/currency (to-entity-map credit-account db)))
-      (throw (ex-info "Entry amount is in a different currency to that of the account"
-                      {:amount-currency (.getCurrencyUnit amount)
-                       :debit-account-currency (:pro.juxt.accounting/currency (to-entity-map debit-account db))
+      (throw (ex-info "Accounts must be denonminated in the same currency"
+                      {:debit-account-currency (:pro.juxt.accounting/currency (to-entity-map debit-account db))
                        :credit-account-currency (:pro.juxt.accounting/currency (to-entity-map credit-account db))}))))
 
   (concat
    (apply concat
-          (for [{:keys [debit-account credit-account ^Money amount ^String description]} transactions]
-            (let [node (d/tempid :db.part/user)]
+          (for [{:keys [debit-account credit-account amount ^String description]} transactions]
+            (let [amount (as-money amount (:pro.juxt.accounting/currency (to-entity-map debit-account db)))
+                  node (d/tempid :db.part/user)]
               [[:db/add (to-ref-id debit-account) :pro.juxt.accounting/debit node]
                [:db/add (to-ref-id credit-account) :pro.juxt.accounting/credit node]
                [:db/add node :pro.juxt.accounting/amount (.getAmount amount)]
