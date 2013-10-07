@@ -168,6 +168,26 @@
          (remove nil?) vec
          (transact-insert conn account))))
 
+;; Coercion to account
+(defprotocol Account
+  (as-account [_ db]))
+
+(extend-protocol Account
+  Number
+  (as-account [n db] n)
+  clojure.lang.APersistentMap
+  (as-account [{:keys [entity type]} db]
+    (when (nil? entity) (throw (ex-info "Account :entity is missing")))
+    (when (nil? type) (throw (ex-info "Account :type is missing")))
+    (d/entity db
+            (ffirst
+             (q '[:find ?account
+                  :in $ ?entity ?type
+                  :where
+                  [?account :pro.juxt.accounting/entity ?entity]
+                  [?account :pro.juxt.accounting/account-type ?type]]
+                (as-db db) (to-ref-id entity) type)))))
+
 (defn find-account
   "Find an entity's account of a given type"
   [db {:keys [entity type]}]
