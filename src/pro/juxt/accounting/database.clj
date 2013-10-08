@@ -218,14 +218,16 @@
   #_(infof "DatabaseReference impls datomic.db.Db classloader: %s" (.getClassLoader (-> (into {} DatabaseReference)
                                                                                       :impls keys first)))
   #_(infof "datomic.db.Db class loader is %s" (.getClassLoader datomic.db.Db))
-  (d/entity db
-            (ffirst
-             (q '[:find ?account
-                  :in $ ?entity ?type
-                  :where
-                  [?account :pro.juxt.accounting/entity ?entity]
-                  [?account :pro.juxt.accounting/account-type ?type]]
-                (as-db db) (to-ref-id entity) type))))
+  (if-let [acc
+        (ffirst
+         (q '[:find ?account
+              :in $ ?entity ?type
+              :where
+              [?account :pro.juxt.accounting/entity ?entity]
+              [?account :pro.juxt.accounting/account-type ?type]]
+            (as-db db) (to-ref-id entity) type))]
+    (d/entity db acc)
+    (throw (ex-info "Account not found" {:entity entity :type type}))))
 
 (defn get-accounts
   "Get all the accounts"
@@ -286,10 +288,13 @@
                [:db/add node :pro.juxt/description description]])))
    [[:db/add txid :pro.juxt.accounting/date (to-date date)]]))
 
+(keyword "foo/bar") ;; foo/_bar
+
 (defn get-entries [db account type]
-  (map (fn [[date account amount currency tx entry description]]
+  (map (fn [[date account amount currency tx entry description twin-account]]
          {:date date
           :account account
+          :twin-account account
           :invoice (:pro.juxt.accounting/invoice (d/entity (as-db db) entry))
           :entry entry
           :type type
@@ -297,9 +302,14 @@
           :tx tx
           :description description
           })
-       (q {:find '[?date ?account ?amount ?currency ?tx ?entry ?description]
+       (q {:find '[?date ?account ?amount ?currency ?tx ?entry ?description ?twin-account]
            :in '[$ ?account]
            :where [['?account type '?entry]
+                   ['?twin-account
+                    (case type
+                      :pro.juxt.accounting/debit :pro.juxt.accounting/credit
+                      :pro.juxt.accounting/credit :pro.juxt.accounting/debit)
+                    '?entry]
                    '[?account :pro.juxt.accounting/currency ?currency]
                    '[?entry :pro.juxt.accounting/amount ?amount ?tx]
                    '[?entry :pro.juxt/description ?description]

@@ -183,50 +183,55 @@
           (invoicing/generate-pdf-for-invoice conn invoice-data)
           ))
 
-      #_(doseq [{:keys [entity vat-account credit-account frs-credit-account date frs-rate]} vat-returns]
-          (let [get-time (fn [d] (.getTime d))]
-            ;; Get invoices for last 3 month period that haven't already been paid
-            (debugf "VAT return - date is %s" (.getTime (db/to-date date)))
+      (doseq [{:keys [entity vat-account credit-account date] :as vat-return} vat-returns]
+        (let [get-time (fn [d] (.getTime d))]
+          ;; Get invoices for last 3 month period that haven't already been paid
+          (debugf "VAT return - date is %s" (.getTime (db/to-date date)))
 
-            (debugf "All invoices")
-            (debug (with-out-str (pprint (db/get-invoices (d/db conn)))))
+          (debugf "All invoices")
+          (debug (with-out-str (pprint (db/get-invoices (d/db conn)))))
 
-            (debugf "Filtered invoices")
-            ;; TODO Need to reduce over invoices, sum sub-total, sum total (for box 6)
+          (debugf "Filtered invoices")
+          ;; TODO Need to reduce over invoices, sum sub-total, sum total (for box 6)
 
-            (let [{:keys [invoices subtotal total output-tax]}
-                  (reduce
-                   (fn [s {:keys [invoice total subtotal output-tax]}]
-                     (-> s
-                         (update-in [:invoices] conj invoice)
-                         (update-in [:total] + total)
-                         (update-in [:output-tax] + output-tax)
-                         (update-in [:subtotal] + subtotal)
-                         ))
-                   {:invoices []
-                    :subtotal 0
-                    :output-tax 0
-                    :total 0}
-                   (filter
-                    (every-pred
-                     (comp not :output-tax-paid)
-                     (comp (partial > (get-time (db/to-date date))) get-time :invoice-date))
-                    (db/get-invoices (d/db conn))))]
+          (let [{:keys [invoices subtotal total output-tax]}
+                (reduce
+                 (fn [s {:keys [invoice total subtotal output-tax]}]
+                   (-> s
+                       (update-in [:invoices] conj invoice)
+                       (update-in [:total] + total)
+                       (update-in [:output-tax] + output-tax)
+                       (update-in [:subtotal] + subtotal)
+                       ))
+                 {:invoices []
+                  :subtotal 0
+                  :output-tax 0
+                  :total 0}
+                 (filter
+                  (every-pred
+                   (comp not :output-tax-paid)
+                   (comp (partial > (get-time (db/to-date date))) get-time :invoice-date))
+                  (db/get-invoices (d/db conn))))]
 
-              (debugf "subtotal is %s" subtotal)
-              (debugf "subtotal type is %s" (type subtotal))
-              (debugf "frs-rate is %s" frs-rate)
-              (debugf "frs-rate type is %s" (type frs-rate))
-              ;; TODO: Check invoice is denominated in GBP first!
-              (let [owing (-> (.multipliedBy
-                               (amount-of GBP subtotal)
-                               frs-rate
-                               java.math.RoundingMode/DOWN)
-                              (ma/round 0 :down))
-                    keep (ma/minus (amount-of GBP output-tax) owing)]
+            (debugf "subtotal is %s" subtotal)
+            (debugf "subtotal type is %s" (type subtotal))
+            ;;(debugf "frs-rate is %s" frs-rate)
+            ;;(debugf "frs-rate type is %s" (type frs-rate))
+
+            ;; TODO: Check invoice is denominated in GBP first!
+
+            (if-let [frs-rate (:frs-rate vat-return)]
+              (let [owing (if frs-rate (-> (.multipliedBy
+                                            (amount-of GBP subtotal)
+                                            frs-rate
+                                            java.math.RoundingMode/DOWN)
+                                           (ma/round 0 :down)))
+                    keep (ma/minus (amount-of GBP output-tax) owing)
+                    frs-credit-account (:frs-credit-account vat-return)]
 
                 (debugf "owing is %s" owing)
                 (debugf "keep is %s" keep)
+
                 (let [db (d/db conn)]
                   @(d/transact
                     conn
@@ -236,17 +241,21 @@
                        (for [invoice invoices]
                          [:db/add invoice :pro.juxt.accounting/output-tax-paid returnid])
                        (list
-                        [:db/add txid :pro.juxt/description "VAT paid to HMRC"]
-                        [:db/add txid :pro.juxt/description "VAT paid to HMRC"]
                         [:db/add returnid :pro.juxt.accounting/date date]
                         [:db/add returnid :pro.juxt.accounting.vat/box-6 total]
                         [:db/add returnid :pro.juxt.accounting.vat/box-1 (.getAmount owing)])
                        (db/assemble-transaction
                         db txid
-                        :date (db/to-date date)
-                        :debits {(db/find-account db {:entity entity :type vat-account})
-                                 (amount-of GBP output-tax)}
-                        :credits {(db/find-account db {:entity entity :type credit-account})
-                                  owing
-                                  (db/find-account db {:entity entity :type frs-credit-account})
-                                  keep}))))))))))))
+                        (db/to-date date)
+                        [{:debit-account (db/find-account db {:entity entity :type vat-account})
+                          :credit-account (db/find-account db {:entity entity :type credit-account})
+                          :amount owing
+                          :description "VAT"
+                          }
+                         {:debit-account (db/find-account db {:entity entity :type vat-account})
+                          :credit-account (db/find-account db {:entity entity :type frs-credit-account})
+                          :amount keep
+                          :description "Flat Rate Scheme profit"
+                          }
+                         ]
+                        )))))))))))))
