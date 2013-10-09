@@ -176,11 +176,11 @@
 
 (defn create-account!
   "Create an account and return its id."
-  [conn & {:keys [entity type ^CurrencyUnit currency ^String description ^String account-no ^String sort-code]}]
+  [conn & {:keys [ident entity ^CurrencyUnit currency ^String description ^String account-no ^String sort-code]}]
   {:pre [(not (nil? currency))]}
   (let [account (d/tempid :db.part/user)]
-    (->> [(when entity [:db/add account :pro.juxt.accounting/entity (to-ref-id entity)])
-          (when type [:db/add account :pro.juxt.accounting/account-type type])
+    (->> [[:db/add account :db/ident ident]
+          (when entity [:db/add account :pro.juxt.accounting/entity (to-ref-id entity)])
           [:db/add account :pro.juxt.accounting/currency (.getCode currency)]
           (when description [:db/add account :pro.juxt/description description])
           (when account-no [:db/add account :pro.juxt.accounting/account-number account-no])
@@ -188,58 +188,17 @@
          (remove nil?) vec
          (transact-insert conn account))))
 
-;; Coercion to account
-(defprotocol Account
-  (as-account [_ db]))
-
-(extend-protocol Account
-  Number
-  (as-account [n db] n)
-  clojure.lang.APersistentMap
-  (as-account [{:keys [entity type]} db]
-    (when (nil? entity) (throw (ex-info "Account :entity is missing")))
-    (when (nil? type) (throw (ex-info "Account :type is missing")))
-    (d/entity db
-            (ffirst
-             (q '[:find ?account
-                  :in $ ?entity ?type
-                  :where
-                  [?account :pro.juxt.accounting/entity ?entity]
-                  [?account :pro.juxt.accounting/account-type ?type]]
-                (as-db db) (to-ref-id entity) type)))))
-
-(defn find-account
-  "Find an entity's account of a given type"
-  [db {:keys [entity type]}]
-  {:pre [(not (nil? entity))
-         (not (nil? type))]}
-  ;;(infof "DatabaseReference: %s" DatabaseReference)
-  ;;(infof "datomic.db.Db classloader: %s" (.getClassLoader datomic.db.Db))
-  #_(infof "DatabaseReference impls datomic.db.Db classloader: %s" (.getClassLoader (-> (into {} DatabaseReference)
-                                                                                      :impls keys first)))
-  #_(infof "datomic.db.Db class loader is %s" (.getClassLoader datomic.db.Db))
-  (if-let [acc
-        (ffirst
-         (q '[:find ?account
-              :in $ ?entity ?type
-              :where
-              [?account :pro.juxt.accounting/entity ?entity]
-              [?account :pro.juxt.accounting/account-type ?type]]
-            (as-db db) (to-ref-id entity) type))]
-    (d/entity db acc)
-    (throw (ex-info "Account not found" {:entity entity :type type}))))
-
 (defn get-accounts
   "Get all the accounts"
   [db]
-  (map (partial zipmap [:account :entity :entity-name :entity-ident :type :currency])
-       (q '[:find ?account ?entity ?entity-name ?entity-ident ?type ?currency
+  (map (partial zipmap [:account :ident :entity :entity-name :entity-ident :currency])
+       (q '[:find ?account ?ident ?entity ?entity-name ?entity-ident ?currency
             :in $
             :where
+            [?account :db/ident ?ident]
             [?account :pro.juxt.accounting/entity ?entity]
             [?entity :pro.juxt.accounting/name ?entity-name]
             [?entity :db/ident ?entity-ident]
-            [?account :pro.juxt.accounting/account-type ?type]
             [?account :pro.juxt.accounting/currency ?currency]]
           (as-db db))))
 
@@ -288,13 +247,11 @@
                [:db/add node :pro.juxt/description description]])))
    [[:db/add txid :pro.juxt.accounting/date (to-date date)]]))
 
-(keyword "foo/bar") ;; foo/_bar
-
 (defn get-entries [db account type]
   (map (fn [[date account amount currency tx entry description twin-account]]
          {:date date
           :account account
-          :twin-account account
+          :twin-account twin-account
           :invoice (:pro.juxt.accounting/invoice (d/entity (as-db db) entry))
           :entry entry
           :type type
@@ -305,11 +262,12 @@
        (q {:find '[?date ?account ?amount ?currency ?tx ?entry ?description ?twin-account]
            :in '[$ ?account]
            :where [['?account type '?entry]
-                   ['?twin-account
+                   ['?ta
                     (case type
                       :pro.juxt.accounting/debit :pro.juxt.accounting/credit
                       :pro.juxt.accounting/credit :pro.juxt.accounting/debit)
                     '?entry]
+                   '[?ta :db/ident ?twin-account]
                    '[?account :pro.juxt.accounting/currency ?currency]
                    '[?entry :pro.juxt.accounting/amount ?amount ?tx]
                    '[?entry :pro.juxt/description ?description]

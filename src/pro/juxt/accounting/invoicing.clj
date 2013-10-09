@@ -69,6 +69,9 @@
                           purchase-order-reference :purchase-order-reference}]
   {:pre [(not (nil? output-tax-rate))]}
   ;; TODO: Must also come from a set of accounts with a single common currency - write a test first
+
+  (infof "How many entries? %d" (count entries))
+
   (let [entity (get-common-entity db (map :entry entries))]
     (when-not entity (throw (ex-info "All entries must belong to a single client to invoice." {:entries entries})))
     (vec
@@ -97,16 +100,19 @@
          ;; Add statements for each item in the invoice.
          ;; TODO Record the VAT applied
          (apply concat
-                (for [{:keys [entry amount tx]} entries]
-                  (let [id (d/tempid :db.part/user)
-                        tx (d/entity db tx)]
-                    [[:db/add invoice :pro.juxt.accounting/item id]
-                     [:db/add id :pro.juxt.accounting/debit entry]
-                     [:db/add entry :pro.juxt.accounting/invoice invoice]
-                     [:db/add id :pro.juxt.accounting/date (:pro.juxt.accounting/date tx)]
-                     ;;[:db/add id :pro.juxt/description (:pro.juxt/description tx)]
-                     [:db/add id :pro.juxt.accounting/amount (.getAmount amount)]
-                     [:db/add id :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]])))
+                (for [{:keys [entry amount tx] :as entry} entries
+                      :let [entrymap (db/to-entity-map entry db)]]
+                  (do
+                    (infof "Entry is %s" (into {} (seq (db/to-entity-map entry db))))
+                    (let [id (d/tempid :db.part/user)
+                          tx (d/entity db tx)]
+                      [[:db/add invoice :pro.juxt.accounting/item id]
+                       [:db/add id :pro.juxt.accounting/debit entry]
+                       [:db/add entry :pro.juxt.accounting/invoice invoice]
+                       [:db/add id :pro.juxt.accounting/date (:pro.juxt.accounting/date tx)]
+                       [:db/add id :pro.juxt/description (or (:pro.juxt/description entrymap) "(no description)")]
+                       [:db/add id :pro.juxt.accounting/amount (.getAmount amount)]
+                       [:db/add id :pro.juxt.accounting/currency (.getCode (.getCurrencyUnit amount))]]))))
 
          ;; Credit the accounts where the entries are drawn from because
          ;; they've now been invoiced.

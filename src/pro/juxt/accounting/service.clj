@@ -3,7 +3,7 @@
 ;; This file is part of JUXT Accounting.
 ;;
 ;; JUXT Accounting is free software: you can redistribute it and/or modify it under the
-;; terms of the GNU Affero General Public License as published by the Free
+
 ;; Software Foundation, either version 3 of the License, or (at your option) any
 ;; later version.
 ;;
@@ -28,6 +28,7 @@
    [clojure.pprint :refer (pprint)]
    [clojure.tools.logging :refer :all]
    [clojure.java.io :as io]
+   [clojure.set :as set]
    [pro.juxt.accounting.database :as db]
    [datomic.api :as d]
    [garden.core :refer (css)]
@@ -108,9 +109,11 @@
 ;; Don't spend too much work on this, it's just a service and rendering
 ;; will be done in the Pedestal app.
 ;; column order is really just a hack to get balances on the right
+
+
 (defn to-table
-  ([{:keys [column-order formatters classes] :or {column-order (constantly 0)} :as options} rows]
-     (let [ks (sort-by column-order (keys (first rows)))]
+  ([{:keys [column-order hide-columns formatters classes] :or {column-order (constantly 0)} :as options} rows]
+     (let [ks (sort-by column-order (set/difference (set (keys (first rows))) hide-columns))]
        [:table
         [:thead
          [:tr
@@ -122,7 +125,7 @@
             [:tr
              (for [k ks]
                [:td {:class (k classes)}
-                ((or (k formatters) identity) (k row))])]))]]))
+                ((or (k formatters) k) row)])]))]]))
   ([rows] (to-table {} rows)))
 
 (defn explicit-column-order [& keys]
@@ -131,75 +134,83 @@
 (defn get-dburi [context]
   (get-in (:system context) [:jig/config :jig/components (:pro.juxt.accounting/data (:component context)) :db :uri]))
 
+(defn keyword-formatter [x]
+  (format "%s/%s" (namespace x) (name x)))
+
+(defn date-formatter [d]
+  {:pre [(instance? java.util.Date d)]}
+  (.format (java.text.SimpleDateFormat. "y-MM-dd") d))
+
+(defn account-link [url-for a]
+  [:a {:href (url-for ::account-page :params {:account (keyword-formatter a)})} (keyword-formatter a)]
+)
+
 (defbefore accounts-page
   [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
     (assoc context :response
            (ring-resp/response
-            (html {:title "Accounts"
-                   :system system
-                   :url-for url-for
-                   :component component
-                   }
+            (html
+             {:title "Accounts"
+              :system system
+              :url-for url-for
+              :component component
+              }
              [:h2 "Accounts"]
              (let [accounts (db/get-accounts db)]
                (list
                 (->> accounts
-                     (sort-by :entity-name)
+                     (sort-by :ident)
                      (map #(assoc % :balance (db/get-balance db (:account %))))
-                     (map #(assoc % :href (format "accounts/%s" (:account %))))
-                     (map #(dissoc % :account :entity :entity-ident :currency))
-                     (to-table {:column-order (explicit-column-order :entity-name :type :href :balance)
-                                :formatters {:href (fn [x] [:a {:href x} "detail"])
-                                             :balance #(moneyformat % java.util.Locale/UK)}
+                     (to-table {:column-order (explicit-column-order :ident :entity-name :type :href :balance)
+                                :hide-columns #{:entity-ident :entity :account :currency}
+                                :formatters {:ident (fn [x] (account-link url-for (:ident x)))
+                                             :balance #(moneyformat (:balance %) java.util.Locale/UK)}
                                 :classes {:balance :numeric}}))
                 [:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :account accounts)) java.util.Locale/UK)]
                 ))
              )))))
 
-(defn date-formatter [d]
-  {:pre [(instance? java.util.Date d)]}
-  (.format (java.text.SimpleDateFormat. "y-MM-dd") d))
-
-(deftrace to-ledger-view [db entries]
+(deftrace to-ledger-view [db entries url-for]
   (->> entries (sort-by :date)
-       ;;(map #(assoc % :description (:pro.juxt/description %)))
-       (map #(dissoc % :account :tx :entry :type :invoice))
-       (to-table {:column-order (explicit-column-order :date :description :amount)
-                  :formatters {:amount #(moneyformat % java.util.Locale/UK)
-                               :date date-formatter}
+       (to-table {:column-order (explicit-column-order :date :description :twin-account :amount)
+                  :hide-columns #{:entry :account :tx :type}
+                  :formatters {:amount (comp #(moneyformat % java.util.Locale/UK) :amount)
+                               :date (comp date-formatter :date)
+                               :twin-account (comp (partial account-link url-for) :twin-account)}
                   :classes {:description "span"
                             :amount "right"}})))
 
 (defbefore account-page
-  [{:keys [request system url-for] :as context}]
+  [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
     (assoc context :response
            (ring-resp/response
-            (let [account (get-in request [:path-params :account])
+            (let [account (apply keyword (clojure.string/split (get-in request [:path-params :account]) #"/"))
                   details (db/to-entity-map account db)
                   entity (db/to-entity-map (:pro.juxt.accounting/entity details) db)]
               (html {:title "Account detail"
                      :system system
-                     :url-for url-for}
+                     :url-for url-for
+                     :component component}
                [:h2 "Account"]
                [:dl
                 (for [[dt dd]
-                      (map vector ["Account type" "Currency" "Owner" "Balance"]
+                      (map vector ["Id" "Currency" "Entity" "Balance"]
                            (concat
-                            ((juxt :pro.juxt.accounting/account-type :pro.juxt.accounting/currency) details)
+                            ((juxt (comp str :db/ident) :pro.juxt.accounting/currency) details)
                             ((juxt :pro.juxt.accounting/name) entity)
                             [(moneyformat (db/get-balance db account) java.util.Locale/UK)]))]
                   (list [:dt dt]
-                        [:dd dd])
-                  )]
+                        [:dd dd]))]
+
                [:h3 "Debits"]
-               [:pre (to-ledger-view db (db/get-debits db account))]
+               [:pre (to-ledger-view db (db/get-debits db account) url-for)]
                [:p "Total debit: " (moneyformat (db/get-total-debit db account) java.util.Locale/UK)]
                [:h3 "Credits"]
-               [:pre (to-ledger-view db (db/get-credits db account))]
+               [:pre (to-ledger-view db (db/get-credits db account) url-for)]
                [:p "Total credit: " (moneyformat (db/get-total-credit db account) java.util.Locale/UK)]))))))
 
 (defbefore invoices-page
@@ -215,21 +226,14 @@
              [:h2 "Invoices"]
              (let [invoices (db/get-invoices db)]
                (->> invoices
-                    (map #(assoc % :pdf-file (:invoice-ref %)))
-                    (to-table {:formatters {:invoice (fn [x] [:a {:href (format "invoices/%s" x)} "details"])
-                                            :invoice-date date-formatter
-                                            :issue-date date-formatter
-                                            :output-tax-paid #(some-> % :pro.juxt.accounting/date date-formatter)
-                                            :pdf-file (fn [x] [:a {:href (format "invoice-pdfs/%s" x)} "PDF"])}
-                               :column-order (explicit-column-order :invoice-date :invoice-ref :issue-date :entity-name :invoice :subtotal :vat :total)}))))
+                    (to-table {:formatters {:invoice-ref (fn [x] [:a {:href (url-for ::invoice-pdf-page :params {:invoice-ref (:invoice-ref x)})} (:invoice-ref x)])
+                                            :invoice-date (comp date-formatter :invoice-date)
+                                            :issue-date (comp date-formatter :issue-date)
+                                            :output-tax-paid #(some-> % :output-tax-paid :pro.juxt.accounting/date date-formatter)
+                                            }
+                               :hide-columns #{:invoice}
+                               :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))
             ))))
-
-(defbefore invoice-page
-  [{:keys [request system] :as context}]
-  (let [dburi (get-dburi context)
-        db (d/db (d/connect dburi))]
-    (assoc context :response
-           (ring-resp/response "TODO"))))
 
 (defbefore invoice-pdf-page
   [{:keys [request system] :as context}]
@@ -256,7 +260,7 @@
              [:h2 "VAT Returns"]
              (let [returns (db/get-vat-returns db)]
                (->> returns
-                    (to-table {:formatters {:date date-formatter}
+                    (to-table {:formatters {:date (comp date-formatter :date)}
                                :column-order (explicit-column-order :date :box1 :box6)}))))))))
 
 (defbefore settings-page
@@ -276,9 +280,8 @@
    ["/index" {:get index-page}]
    ["/style.css" {:get css-page}]
    ["/accounts" {:get accounts-page}]
-   ["/accounts/:account" {:get account-page}]
+   ["/accounts/*account" {:get account-page}]
    ["/invoices" {:get invoices-page}]
-   ["/invoices/:invoice" {:get invoice-page}]
    ["/invoice-pdfs/:invoice-ref" {:get invoice-pdf-page}]
    ["/vat-returns" {:get vat-returns-page}]
    ["/about" {:get about-page}]

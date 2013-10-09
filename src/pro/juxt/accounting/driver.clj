@@ -65,8 +65,8 @@
                  (db/assemble-transaction
                   db txid
                   (or (:date bookentry) (:date billing))
-                  [{:debit-account (db/as-account (:debit-account bookentry) db)
-                    :credit-account (db/as-account (:credit-account bookentry) db)
+                  [{:debit-account (:debit-account bookentry)
+                    :credit-account (:credit-account bookentry)
                     :amount (:amount bookentry)
                     :description (:description bookentry)}]))))))))))
 
@@ -93,11 +93,11 @@
          :invoice-address (or invoice-address registered-address)
          :invoice-addressee invoice-addressee))
 
-      (doseq [{:keys [entity type currency account-no sort-code]} accounts]
+      (doseq [[ident {:keys [entity currency account-no sort-code]}] accounts]
         (db/create-account!
          conn
+         :ident ident
          :entity entity
-         :type type
          :currency currency
          :account-no account-no
          :sort-code sort-code
@@ -119,8 +119,8 @@
               (db/assemble-transaction
                db txid
                (:date tx)
-               [{:debit-account (db/find-account db (:debit-account tx))
-                 :credit-account (db/find-account db (:credit-account tx))
+               [{:debit-account (:debit-account tx)
+                 :credit-account (:credit-account tx)
                  :amount (as-money (:amount tx) (:currency tx))
                  :description (:description tx)}]
                ))))
@@ -135,10 +135,10 @@
               (:date tx)
               (map (fn [entry]
                      (infof "entry is %s" entry)
-                     (map-map entry {:debit-account #(db/find-account db (:debit-account %))
-                                     :credit-account #(db/find-account db (:credit-account %))
+                     (map-map entry {:debit-account :debit-account
+                                     :credit-account :credit-account
                                      :description :description
-                                     :amount #(as-money (:amount %) (:pro.juxt.accounting/currency (db/find-account db (:debit-account %))))
+                                     :amount #(as-money (:amount %) (:pro.juxt.accounting/currency (db/to-entity-map (:debit-account %) db)))
                                      }))
                    (:transactions tx)))))
 
@@ -148,9 +148,7 @@
       (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
         (let [db (d/db conn)
               company (d/entity db issuer)
-              receiving-account (db/find-account db {:entity issuer :type receiving-account})
-              accno (:pro.juxt.accounting/account-number receiving-account)
-              sort-code (:pro.juxt.accounting/sort-code receiving-account)
+              {accno :pro.juxt.accounting/account-number sort-code :pro.juxt.accounting/sort-code} (db/to-entity-map receiving-account db)
               templater (invoicing/create-invoice-data-template
                          ;; TODO: All these fields are part of the issuer
                          {:title "Director"
@@ -167,9 +165,9 @@
               invoice
               (invoicing/issue-invoice
                conn
-               :draw-from (:db/id (db/find-account db {:entity entity :type draw-from}))
-               :debit-to (:db/id (db/find-account db {:entity entity :type debit-to}))
-               :output-tax-account (:db/id (db/find-account db output-tax-account))
+               :draw-from draw-from
+               :debit-to debit-to
+               :output-tax-account output-tax-account
                :output-tax-rate output-tax-rate
                :invoice-date invoice-date
                :issue-date issue-date
@@ -183,7 +181,7 @@
           (invoicing/generate-pdf-for-invoice conn invoice-data)
           ))
 
-      (doseq [{:keys [entity vat-account credit-account date] :as vat-return} vat-returns]
+      (doseq [{:keys [entity vat-account credit-account date retained-vat-account] :as vat-return} vat-returns]
         (let [get-time (fn [d] (.getTime d))]
           ;; Get invoices for last 3 month period that haven't already been paid
           (debugf "VAT return - date is %s" (.getTime (db/to-date date)))
@@ -215,47 +213,46 @@
 
             (debugf "subtotal is %s" subtotal)
             (debugf "subtotal type is %s" (type subtotal))
-            ;;(debugf "frs-rate is %s" frs-rate)
-            ;;(debugf "frs-rate type is %s" (type frs-rate))
 
             ;; TODO: Check invoice is denominated in GBP first!
 
-            (if-let [frs-rate (:frs-rate vat-return)]
-              (let [owing (if frs-rate (-> (.multipliedBy
-                                            (amount-of GBP subtotal)
-                                            frs-rate
-                                            java.math.RoundingMode/DOWN)
-                                           (ma/round 0 :down)))
-                    keep (ma/minus (amount-of GBP output-tax) owing)
-                    frs-credit-account (:frs-credit-account vat-return)]
+            (let [owing (if-let [frs-rate (:frs-rate vat-return)]
+                          (-> (.multipliedBy
+                               (amount-of GBP subtotal)
+                               frs-rate
+                               java.math.RoundingMode/DOWN)
+                              (ma/round 0 :down))
+                          (-> (amount-of GBP output-tax)
+                              (ma/round 0 :down)))
+                  keep (ma/minus (amount-of GBP output-tax) owing)]
 
-                (debugf "owing is %s" owing)
-                (debugf "keep is %s" keep)
+              (debugf "owing is %s" owing)
+              (debugf "keep is %s" keep)
 
-                (let [db (d/db conn)]
-                  @(d/transact
-                    conn
-                    (let [returnid (d/tempid :db.part/user)
-                          txid (d/tempid :db.part/tx)]
-                      (concat
-                       (for [invoice invoices]
-                         [:db/add invoice :pro.juxt.accounting/output-tax-paid returnid])
-                       (list
-                        [:db/add returnid :pro.juxt.accounting/date date]
-                        [:db/add returnid :pro.juxt.accounting.vat/box-6 total]
-                        [:db/add returnid :pro.juxt.accounting.vat/box-1 (.getAmount owing)])
-                       (db/assemble-transaction
-                        db txid
-                        (db/to-date date)
-                        [{:debit-account (db/find-account db {:entity entity :type vat-account})
-                          :credit-account (db/find-account db {:entity entity :type credit-account})
-                          :amount owing
-                          :description "VAT"
-                          }
-                         {:debit-account (db/find-account db {:entity entity :type vat-account})
-                          :credit-account (db/find-account db {:entity entity :type frs-credit-account})
-                          :amount keep
-                          :description "Flat Rate Scheme profit"
-                          }
-                         ]
-                        )))))))))))))
+              (let [db (d/db conn)]
+                @(d/transact
+                  conn
+                  (let [returnid (d/tempid :db.part/user)
+                        txid (d/tempid :db.part/tx)]
+                    (concat
+                     (for [invoice invoices]
+                       [:db/add invoice :pro.juxt.accounting/output-tax-paid returnid])
+                     (list
+                      [:db/add returnid :pro.juxt.accounting/date date]
+                      [:db/add returnid :pro.juxt.accounting.vat/box-6 (BigInteger/valueOf (long (Math/floor total)))]
+                      [:db/add returnid :pro.juxt.accounting.vat/box-1 (BigInteger/valueOf (long (.getAmount owing)))])
+
+                     (db/assemble-transaction
+                      db txid
+                      (db/to-date date)
+                      (let [a {:debit-account vat-account
+                               :credit-account credit-account
+                               :amount owing
+                               :description "VAT"}]
+                        (if (ma/positive? keep)
+                          [a {:debit-account vat-account
+                              :credit-account retained-vat-account
+                              :amount keep
+                              :description "Retained VAT"
+                              }]
+                          [a]))))))))))))))

@@ -23,42 +23,28 @@
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)])
   (:import (org.joda.money Money CurrencyUnit)))
 
-(defn account-of [db m]
-  {:post [(not (nil? %))]}
-  (let [acct (db/find-account db m)]
-    (when (nil? acct) (throw (ex-info "No such account: " m)))
-    (:db/id acct)))
-
 (defn training [db context billing]
   {:date (:date billing)
    :amount (amount-of GBP (:amount-ex-vat billing))
-   :debit-account (account-of db (:debit-account context))
-   :credit-account (account-of db (:credit-account context))
+   :debit-account (:debit-account context)
+   :credit-account (:credit-account context)
    :description (:description billing)})
 
 (defn expenses [db context billing]
   (let [amount (ma/parse (:amount billing))]
-    (let [m
-          {:date (:date billing)
-           :debit-account (:debit-account context)
-           :credit-account (account-of db (:credit-account context))
-           :amount amount
-           :description (:description billing)
-           ;; TODO: Get expense type/code, or infer it from description
-           }]
-      (if-let [entity (:client billing)]
-        (assoc m
-          :debit-account (account-of db (:credit-account context))
-          :credit-account (account-of db
-                                      {:entity entity
-                                       :type :pro.juxt.accounting/expenses}))
-        m))))
+    {:date (:date billing)
+     :debit-account (:debit-account context)
+     :credit-account (:credit-account context)
+     :amount amount
+     :description (:description billing)
+     ;; TODO: Get expense type/code, or infer it from description
+     }))
 
 (defn daily-rate-billing [db context billing]
   {:date (:date billing)
    :amount (amount-of GBP (:rate billing))
-   :debit-account (account-of db (:debit-account context))
-   :credit-account (account-of db (:credit-account context))
+   :debit-account (:debit-account context)
+   :credit-account (:credit-account context)
    :description (:description billing)})
 
 (def descriptions {:full-day-with-travel "Full day (with travel)"
@@ -74,8 +60,8 @@
         _ (assert (not (nil? amt)) (str billing))
         amount (amount-of GBP amt java.math.RoundingMode/DOWN)]
     {:date date
-     :debit-account (account-of db (:debit-account context))
-     :credit-account (account-of db (:credit-account context))
+     :debit-account (:debit-account context)
+     :credit-account (:credit-account context)
      :amount amount
      :description (str (get descriptions type)
                                            (when description (str " - " description))
@@ -97,13 +83,13 @@
                (cond
                 (and (pos? debit) (re-matches #".*LIKELY LTD.*" (:description record)))
                 (assoc {}
-                  :credit-account (account-of db {:entity :likely :type :pro.juxt.accounting/invoiced})
-                  :debit-account (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})
+                  :credit-account :likely/invoiced
+                  :debit-account :congreve/current-account
                   :amount (amount-of GBP debit))
 
                 (and (pos? credit) (re-matches #".*HMRC VAT.*" (:description record)))
                 (assoc {}
-                  :credit-account (account-of db {:entity :congreve :type :pro.juxt.accounting/current-account})
-                  :debit-account (account-of db {:entity :congreve :type :pro.juxt.accounting/vat-owing})
+                  :credit-account :congreve/current-account
+                  :debit-account :congreve/vat-owing
                   :amount (amount-of GBP credit)))]
       (merge fields fields2))))
