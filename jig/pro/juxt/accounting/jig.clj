@@ -34,6 +34,7 @@
   (init [_ system]
     (infof "Initialising Database component, config is %s"
            (select-keys config [:db :accounts-file]))
+    (d/delete-database (-> config :db :uri))
     (db/init (-> config :db :uri))
     system)
   (start [_ system]
