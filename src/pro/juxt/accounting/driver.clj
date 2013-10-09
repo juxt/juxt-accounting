@@ -14,6 +14,12 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
+
+;; Right, I know this namespace is just awful, consisting of HUGE
+;; functions with few if any comments. It's an early version and I'm
+;; concentrating on getting things working rather than code style. I'll
+;; re-factor it sometime, I promise, really I will....
+
 (ns pro.juxt.accounting.driver
   (:require
    [clojurewerkz.money.amounts :as ma :refer (amount-of)]
