@@ -112,8 +112,8 @@
            (for [[credit-account amount] (reduce-kv (fn [m k v]
                                                       (assoc m k (total (map :value v))))
                                                     {} (group-by (comp :db/id :account) components))]
-             {:amount amount :debit-account debit-account :credit-account credit-account :description description})
-           [{:amount output-tax :debit-account debit-account :credit-account output-tax-account :description "VAT"}])
+             {:amount amount :debit-account debit-account :credit-account credit-account :description description :component-type :net})
+           [{:amount output-tax :debit-account debit-account :credit-account output-tax-account :description "VAT" :component-type :vat}])
           "invoicing: Invoice credits")))))))
 
 ;; TODO This isn't really issuing the invoice because that's only when
@@ -136,7 +136,7 @@
         (filter (every-pred
                  (until-pred (.getTime invoice-date))
                  ;; Here's the bit - :juxt.accounting/invoice-item-component
-                 (comp not :juxt.accounting/invoice-item-component))
+                 (comp not :invoice-item))
                 (db/get-account-components db account-to-credit :juxt.accounting/debit))
         invoiceid (d/tempid :db.part/user)]
 
@@ -219,7 +219,7 @@
             [:chunk {:family :courier} (-> issuer :bank-sort-code)]]]]]]]
 
       `[:table {:border-width 1 :cell-border true :border true
-                :widths [25 65 10]
+                :widths [25 60 15]
                 :header [{:color [255 255 255 255 255]} "Date" "Description" "Total"]}
 
         ~@(for [{:keys [date description amount]} (map printable-item items)]

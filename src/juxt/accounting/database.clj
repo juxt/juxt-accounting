@@ -155,22 +155,6 @@
           :entity-name [:entity :juxt.accounting/name]})
        (get-accounts db)))
 
-#_(map :count-debits (get-accounts-as-table "datomic:mem://juxt/accounts"))
-
-#_(find-account "datomic:mem://juxt/accounts" :account-no "40523705")
-
-#_(find-account "datomic:mem://juxt/accounts" :db/ident "40523705")
-
-#_(get-entries "datomic:mem://juxt/accounts" :juxt/current-account :juxt.accounting/debit)
-
-#_(get-balance "datomic:mem://juxt/accounts" :juxt/current-account)
-
-#_(get-debit-amounts "datomic:mem://juxt/accounts" :juxt/current-account)
-
-#_(get-amounts "datomic:mem://juxt/accounts" :juxt/current-account :juxt.accounting/debit)
-
-#_(get-debit-amounts "datomic:mem://juxt/accounts" :juxt/current-account)
-
 (defn find-account [db & {:as keyvals}]
   (let [squash-sort-code        ; to avoid inequality due to punctuation
         (fn [m]
@@ -229,11 +213,8 @@
             (for [{:keys [debit-account credit-account amount ^String description component-type]} components]
               (let [amount (as-money amount (:juxt.accounting/currency (to-entity-map debit-account db)))
                     component (d/tempid :db.part/user)]
-                #_(when (= description ""))
                 (remove nil?
                         [
-                         ;; TODO Remove :juxt/type and its ilk
-                         [:db/add entry :juxt/type :juxt.accounting/entry]
                          [:db/add entry :juxt.accounting/component component]
                          [:db/add (to-ref-id debit-account) :juxt.accounting/debit component]
                          [:db/add (to-ref-id credit-account) :juxt.accounting/credit component]
@@ -243,21 +224,6 @@
                          [:db/add component :juxt/description description]]))))
      ;; TX metadata
      [[:db/add txid :juxt/description txdescription]])))
-
-
-#_(filter (comp (partial = "Proof-of-concept for Linked Data website") :description)
-        (map (partial zipmap [:entry :component :account :ta :description :tx :txdesc])
-             (d/q '[:find ?entry ?component ?account ?ta ?description ?tx ?txdesc
-                    :in $
-                    :where
-                    [?account :juxt.accounting/credit ?component]
-                    [?entry :juxt.accounting/component ?component]
-                    [?component :juxt/description ?description]
-                    [?ta :juxt.accounting/debit ?component ?tx]
-                    [?tx :juxt/description ?txdesc]
-                    ;;            [?ta :db/ident ?taident]
-                    [?account :db/ident :congreve/liabilities]
-                    ] (as-db "datomic:mem://juxt/accounts"))))
 
 (defn get-account-components
   [db account type]
@@ -271,19 +237,19 @@
               :where [['?account type '?component]
                       ['?other-account rtype '?component]
                       ['?entry :juxt.accounting/component '?component '?tx]
-                      ['?entry :juxt/type :juxt.accounting/entry]
                       ]} db (to-ref-id account))]
       (spider (zipmap [:entry :component :account :other-account :txdesc] (map #(to-entity-map % db) sol))
               {:id [:component :db/id]
                :entry [:entry :db/id]
                :date [:entry :juxt.accounting/date]
                :type [(constantly type)]
+               :component-type [:component :juxt/type]
                :account [:account]
                :other-account [:other-account]
                :description [:component :juxt/description]
                :value [:component (juxt :juxt.accounting/amount :juxt.accounting/currency) (partial apply as-money)]
-               :component-type [:component :juxt/type]
                :txdesc [:txdesc :juxt/description]
+               :invoice-item [:component :juxt.accounting/_invoice-item-component]
                }))))
 
 (defn count-account-components [db account]
@@ -306,110 +272,6 @@
        minus
        (get-total db account (map :value (get-account-components db account :juxt.accounting/credit))))))
 
-#_(total (map :value (get-account-components "datomic:mem://juxt/accounts" :juxt/current-account :juxt.accounting/debit)))
-
-#_(get-account-debits-or-credits "datomic:mem://juxt/accounts" :juxt/current-account :juxt.accounting/debit)
-
-#_(defn get-entries [db account type]
-  (map (fn [[date account amount currency entry description twin-account]]
-         {:date date
-          :account account
-          :twin-account twin-account
-          :invoice (:juxt.accounting/invoice (d/entity (as-db db) entry))
-          :entry entry
-          :type type
-          :amount (as-money amount currency)
-          :description description
-          })
-       (q {:find '[?date ?account ?amount ?currency ?entry ?description ?twin-account]
-           :in '[$ ?account]
-           :where [['?account type '?component]
-                   ['?ta
-                    (case type
-                      :juxt.accounting/debit :juxt.accounting/credit
-                      :juxt.accounting/credit :juxt.accounting/debit)
-                    '?component]
-                   '[?ta :db/ident ?twin-account]
-                   '[?account :juxt.accounting/currency ?currency]
-                   '[?entry :juxt.accounting/amount ?amount]
-                   '[?entry :juxt/description ?description]
-                   '[?entry :juxt.accounting/date ?date]
-                   ]} (as-db db) (to-ref-id account))))
-
-#_(defn get-amounts [db account type]
-  (map (fn [[amount currency]] (org.joda.money.Money/of (org.joda.money.CurrencyUnit/getInstance currency) amount))
-         (q {:find '[?amount ?currency]
-             :in '[$ ?account]
-             :with '[?entry-component]
-             :where [['?account type '?entry-component]
-                     '[?account :juxt.accounting/currency ?currency]
-                     '[?entry-component :juxt.accounting/amount ?amount]
-                     ]} (as-db db) (to-ref-id account))))
-
-#_(defn get-entries-with-vat [db account type]
-  (let [db (as-db "datomic:mem://juxt/accounts")
-        rtype (case type
-                :juxt.accounting/debit :juxt.accounting/credit
-                :juxt.accounting/credit :juxt.accounting/debit)]
-    (map (comp #(spider % {:date [:net :juxt.accounting/_component first :juxt.accounting/date]
-                                :net-amount [:net :juxt.accounting/amount]
-                                :net-currency [:net :juxt.accounting/currency]
-                                :net-description [:net :juxt/description]
-                                :twin-account [:twin-account :db/ident]
-                                :vat-amount [:vat :juxt.accounting/amount]
-                                :vat-currency [:vat :juxt.accounting/currency]
-                                :vat-account [:vat-account :db/ident]})
-               (partial zipmap [:net :twin-account :vat :vat-account]))
-         (for [sol
-               (d/q
-                {:find '[?net ?twin-account ?vat ?vat-account]
-                 :in '[$ ?account]
-                 :where [['?account type '?net]
-                         ['?twin-account rtype '?net]
-                         '[?entry :juxt.accounting/component ?net]
-                         '[?net :juxt/type :net]
-                         '[?entry :juxt.accounting/component ?vat]
-                         '[?vat :juxt/type :vat]
-                         ['?vat-account rtype '?vat]]}
-                db account
-                )]
-           ;; This seems to be a nice pattern, use Datalog to get
-           ;; entites, and 'spider' to get paths - that neatly
-           ;; supports the equivalent of the OPTIONAL clause in SPARQL.
-           ;; Don't do (into {}) - because we want a bi-directional graph.
-           ;; Datomic Devilry
-           (map #(to-entity-map % db) sol)))))
-
-#_(get-entries-with-vat "datomic:mem://juxt/accounts" :mastodonc/assets-pending-invoice )
-
-#_(let [db (as-db "datomic:mem://juxt/accounts")]
-  (map (comp #(spider % {:date [:entry :juxt.accounting/date]
-                              :type [:entry :juxt.accounting/component :juxt/type]
-                              :net-description [:entry :juxt.accounting/component :juxt/description]
-                              })
-             (partial zipmap [:entry]))
-       (for [sol
-             (d/q
-              {:find '[?entry]
-               :in '[$ ?account]
-               :where [['?account :juxt.accounting/debit '?component]
-                       '[?entry :juxt.accounting/component ?component]
-                       ]}
-              db :mastodonc/assets-pending-invoice
-              )]
-         ;; This seems to be a nice pattern, use Datalog to get
-         ;; entites, and 'denormalize' to get paths - that neatly
-         ;; supports the equivalent of the OPTIONAL clause in SPARQL.
-         ;; Don't do (into {}) - because we want a bi-directional graph.
-         ;; Datomic Devilry
-         (map #(to-entity-map % db) sol))))
-
-#_(defn get-debits-with-vat [db account]
-  (get-entries-with-vat db account :juxt.accounting/debit))
-
-#_(defn get-credits-with-vat [db account]
-  (get-entries-with-vat db account :juxt.accounting/credit))
-
 (defn get-accounts-as-table [db]
   (map #(spider
          %
@@ -421,41 +283,6 @@
           :entity [:entity :db/ident]
           :entity-name [:entity :juxt.accounting/name]})
        (get-accounts db)))
-
-(defn get-debits [db account]
-  (throw (ex-info "get-debits is now get-account-components")))
-
-(defn get-credits [db account]
-  (throw (ex-info "get-credit is now get-account-components")))
-
-
-#_(defn get-debits [db account]
-  (get-entries db account :juxt.accounting/debit))
-
-#_(defn get-debit-amounts [db account]
-  (get-amounts db account :juxt.accounting/debit))
-
-#_(defn get-credits [db account]
-  (get-entries db account :juxt.accounting/credit))
-
-#_(defn get-credit-amounts [db account]
-  (get-amounts db account :juxt.accounting/credit))
-
-#_(defn get-total [db account monies]
-  (if (empty? monies)
-    (zero (to-currency-unit (:juxt.accounting/currency (to-entity-map account db))))
-    (total monies)))
-
-#_(defn get-total-debit [db account]
-  (get-total db account (get-debit-amounts db account)))
-
-#_(defn get-total-credit [db account]
-  (get-total db account (get-credit-amounts db account)))
-
-#_(defn get-balance
-  "The debits of a given account, minus its credits."
-  [db account]
-  (. (get-total-debit db account) minus (get-total-credit db account)))
 
 #_(defn reconcile-accounts
   "Reconcile accounts."

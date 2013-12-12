@@ -178,8 +178,12 @@
         ))
      )))
 
+(defn vat-ledger? [records]
+  (every? (every-pred #(= 2 (count %))) records))
+
 (defn to-ledger-view [db entries url-for]
-  (->> entries (sort-by :date)
+  [:pre (with-out-str (clojure.pprint/pprint entries))]
+  #_(->> entries (map first) (sort-by :date)
        (to-table {:column-order (explicit-column-order :date :description :other-account)
                   :hide-columns #{:entry :type :account :id}
                   :formatters {:date (comp date-formatter :date)
@@ -188,15 +192,9 @@
 
                                :other-account
                                (fn [{:keys [other-account]}]
-                                 [:a {:href (url-for ::account-page :params {:account (keyword-formatter (:db/ident other-account))})} (apply format "%s/%s" ((juxt namespace name) (:db/ident other-account)))]
-
-
-
-                                        )}
+                                 [:a {:href (url-for ::account-page :params {:account (keyword-formatter (:db/ident other-account))})} (apply format "%s/%s" ((juxt namespace name) (:db/ident other-account)))])}
                   :classes {:value "numeric"}
                   })))
-
-;; (comp #(moneyformat % java.util.Locale/UK) :net-amount)
 
 (defbefore account-page
   [{:keys [request system url-for component] :as context}]
@@ -224,13 +222,7 @@
                      entries (map second (group-by :entry components))]
                  (list
                   [:h3 title]
-                  ;; We're showing the first component of the entry
-                  ;; only, but add an indication there may be others.
-                  ;; TODO We should still show the total value however.
-                  (to-ledger-view db (map #(assoc (first %)
-                                             :component-count (count %))
-
-                                          entries) url-for)
+                  (to-ledger-view db entries url-for)
                   (when (pos? (count entries))
                     [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])
 
