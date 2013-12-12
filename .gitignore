@@ -13,3 +13,4 @@ pom.xml.asc
 /todo.org
 /config.edn
 /.nrepl-port
+/config.clj
