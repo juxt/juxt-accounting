@@ -90,12 +90,10 @@
 
        (apply concat
               (for [{date :date component-id :id :as component} components]
-                (do
-                  (infof "Component is %s" component)
-                  (let [id (d/tempid :db.part/user)]
-                    [[:db/add invoice :juxt.accounting/item id]
-                     [:db/add id :juxt.accounting/component component-id]
-                     ]))))
+                (let [id (d/tempid :db.part/user)]
+                  [[:db/add invoice :juxt.accounting/item id]
+                   [:db/add id :juxt.accounting/invoice-item-component component-id]
+                   ])))
 
        ;; Credit the accounts where the entries are drawn from because
        ;; they've now been invoiced.
@@ -105,8 +103,8 @@
 
        ;; Debit debit-account with total including VAT. This now needs
        ;; to be paid (within some time-frame).
-       #_(let [description (format "Invoicing %s (%s)" (:juxt.accounting/name (to-entity-map entity db))
-                                 (.format (java.text.SimpleDateFormat. "d MMM y") (db/to-date invoice-date)))]
+       (let [description (format "Invoicing %s (%s)" (:juxt.accounting/name (to-entity-map entity db))
+                                   (.format (java.text.SimpleDateFormat. "d MMM y") (db/to-date invoice-date)))]
          (db/assemble-transaction
           db
           (db/to-date invoice-date)
@@ -117,9 +115,6 @@
              {:amount amount :debit-account debit-account :credit-account credit-account :description description})
            [{:amount output-tax :debit-account debit-account :credit-account output-tax-account :description "VAT"}])
           "invoicing: Invoice credits")))))))
-
-
-#_(keys (d/entity  (as-db "datomic:mem://juxt/accounts") 17592186045473 ))
 
 ;; TODO This isn't really issuing the invoice because that's only when
 ;; it's been actually posted - rename accordingly
@@ -140,7 +135,8 @@
         components-to-invoice
         (filter (every-pred
                  (until-pred (.getTime invoice-date))
-                 (comp not :invoice))
+                 ;; Here's the bit - :juxt.accounting/invoice-item-component
+                 (comp not :juxt.accounting/invoice-item-component))
                 (db/get-account-components db account-to-credit :juxt.accounting/debit))
         invoiceid (d/tempid :db.part/user)]
 
@@ -157,24 +153,9 @@
                           :purchase-order-reference purchase-order-reference)
          (db/transact-insert conn invoiceid))))
 
-(defn get-invoice-items [invoice db]
-  {:pre [(db/entity? invoice)
-         (db? db)]}
-  (->> (d/q '[:find ?date ?description ?amount ?currency
-              :in $ ?invoice
-              :where
-              [?invoice :juxt.accounting/item ?item]
-              [?item :juxt.accounting/date ?date]
-              [?item :juxt/description ?description]
-              [?item :juxt.accounting/amount ?amount]
-              [?item :juxt.accounting/currency ?currency]
-              ] db (:db/id invoice))
-       (sort-by (comp #(.getTime %) first) (comparator <))
-       (map (partial zipmap [:date :description :amount :currency]))))
-
 (defn printable-item [item]
-  (spider (first (:juxt.accounting/component item))
-          {:date [:juxt.accounting/_component first
+  (spider (-> item :juxt.accounting/invoice-item-component)
+          {:date [:juxt.accounting/_component first ; the parent entry
                   :juxt.accounting/date from-date (partial timeformat/unparse date-formatter)]
            :description :juxt/description
            :amount (fn [item] (str (.getSymbol (as-currency (:juxt.accounting/currency item)))

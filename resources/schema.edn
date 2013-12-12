@@ -140,6 +140,13 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
+  :db/ident :juxt.accounting/invoice-item-component
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/doc "The relationship between an invoice item and a component"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
   :db/ident :juxt.accounting/invoice-ref
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one

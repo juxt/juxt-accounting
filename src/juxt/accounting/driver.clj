@@ -37,41 +37,7 @@
    [juxt.accounting
     [database :as db]
     [invoicing :as invoicing]
-    [money :refer (as-money)]]
-)
-  )
-
-#_(defn load-transactions [conn {:keys [loader input source format columns] :or {format "application/edn" columns []} :as args}]
-  (infof "Loading transactions")
-  (require (symbol (namespace loader)))
-  (let [ldr (ns-resolve (symbol (namespace loader)) (symbol (name loader)))
-        db (d/db conn)]
-    (when-not ldr (throw (ex-info "Failed to resolve loader" {:namespace (namespace loader)
-                                                              :name (name loader)})))
-
-
-    (let [billing-file (file (.getParentFile source) input)]
-      (when-not (.exists billing-file) (throw (ex-info "Billing input file does not exist" {:billing-file billing-file})))
-      (doseq [billing (case format
-                        "application/edn" (edn/read-string (slurp billing-file))
-                        "text/tab-separated-values" (map (partial zipmap columns) (map #(str/split % #"\t") (line-seq (io/reader billing-file)))))]
-        (let [bookentry (ldr db args billing)] ; should ldr be called transformer?
-          (when bookentry
-            (debugf "Creating transaction from book entry: %s" bookentry)
-            @(d/transact
-              conn
-              (concat
-               (for [[n v] (:metadata bookentry)]
-                 [:db/add txid n v])
-               (db/assemble-transaction
-                db
-                (or (:date bookentry) (:date billing))
-                [{:debit-account (:debit-account bookentry)
-                  :credit-account (:credit-account bookentry)
-                  :amount (:amount bookentry)
-                  :description (:description bookentry)}]
-                "load-transactions")))))))))
-
+    [money :refer (as-money)]]))
 
 (defn process-accounts-file [path dburi]
   (let [fl (file path)
@@ -82,8 +48,6 @@
          (slurp fl))]
 
     (let [conn (d/connect dburi)]
-      (infof "dburi is %s" dburi)
-      (infof "conn is %s, type %s" conn (type conn))
       (doseq [[ident {:keys [name code vat-no registered-address invoice-address invoice-addressee client supplier]}] entities]
         (do
           (db/create-legal-entity!
@@ -102,6 +66,13 @@
              :entity ident
              :currency (to-currency-unit "GBP")
              :name "Accounts Receivable"
+             )
+            (db/create-account!
+             conn
+             :ident (keyword (clojure.core/name ident) "assets")
+             :entity ident
+             :currency (to-currency-unit "GBP")
+             :name "Work supplied"
              )
             (db/create-account!
              conn
@@ -156,47 +127,6 @@
                                          :amount unit-amount
                                          }])
                                "transaction loaded from file"))))))))
-
-      #_(doseq [tx transactions]
-          (cond
-           (and (vector? tx) (= (first tx) :load))
-           (load-transactions conn (assoc (second tx) :source fl))
-
-           (and (map? tx) (:amount tx))
-           @(d/transact
-             conn
-             (let [db (d/db conn)]
-               (concat
-                (list
-                 [:db/add txid :juxt/description (:description tx)])
-                (db/assemble-transaction
-                 db
-                 (:date tx)
-                 [{:debit-account (:debit-account tx)
-                   :credit-account (:credit-account tx)
-                   :amount (as-money (:amount tx) (:currency tx))
-                   :description (:description tx)}]
-                 ))))
-
-           (and (map? tx) (:transactions tx))
-           @(d/transact
-             conn
-             (let [db (d/db conn)]
-               (db/assemble-transaction
-                db
-                (:date tx)
-                (map (fn [entry]
-                       (spider entry {:debit-account :debit-account
-                                      :credit-account :credit-account
-                                      :description :description
-                                      :amount #(as-money (:amount %)
-                                                         (:juxt.accounting/currency (to-entity-map (:debit-account %) db)))
-                                      }))
-                     (:transactions tx))
-                "driver")))
-
-           :otherwise
-           (throw (ex-info "Don't know how to handle tx" {:tx tx}))))
 
       (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
         (infof "Preparing invoice")
