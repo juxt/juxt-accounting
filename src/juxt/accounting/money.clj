@@ -14,7 +14,7 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns pro.juxt.accounting.money
+(ns juxt.accounting.money
   (:require
    [clojurewerkz.money.amounts :refer (amount-of parse)]))
 

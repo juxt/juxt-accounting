@@ -1,0 +1,15 @@
+(* OFX parser *)
+File = newline Header newline RootElement
+Header = MetadataTuple*
+MetadataTuple = MetadataName ":" MetadataValue <newline>
+MetadataName = #"[^\n:\s]+"
+MetadataValue = #"[^\n:\s]+"
+RootElement = Element
+Element = NodeElement | LeafElement
+NodeElement = OpenTag newline Element* CloseTag newline
+LeafElement = OpenTag Value CloseTag newline
+OpenTag = <"<"> TagName <">">
+TagName = #"[\p{Alnum}\.]+"
+Value = #"[\p{Alpha}\s\d\./\-\:]+"
+CloseTag = <"</"> TagName <">">
+<newline> = <"\n"> | <"\r\n">

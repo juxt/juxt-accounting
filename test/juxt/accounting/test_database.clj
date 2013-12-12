@@ -14,12 +14,12 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns pro.juxt.accounting.test-database
+(ns juxt.accounting.test-database
   "Testing the database functions."
   (:refer-clojure :exclude [zero? read-string])
   (:require
    [clojure.test :refer :all]
-   [pro.juxt.accounting.database :refer :all]
+   [juxt.accounting.database :refer :all]
    [datomic.api :refer (q db delete-database entity ident transact tempid) :as d]
    [clojure.tools.logging :refer :all]
    [clojurewerkz.money.currencies :as mc :refer (GBP EUR)]
@@ -58,7 +58,7 @@
                              :currency EUR
                              :description "Just for testing")]
     (is (= :test-account (:db/ident acc)))
-    (is (= "Just for testing" (:pro.juxt/description acc)))))
+    (is (= "Just for testing" (:juxt/description acc)))))
 
 (deftest test-create-transactions
   (let [conn (d/connect dburi)

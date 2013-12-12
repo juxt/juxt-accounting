@@ -1,209 +1,223 @@
 [
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt/description
+  :db/ident :juxt/type
+  :db/valueType :db.type/keyword
+  :db/cardinality :db.cardinality/one
+  :db/doc "An entity's type, useful when other attributes are not enough to disambiguate"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :juxt/description
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "A general description"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/name
+  :db/ident :juxt.accounting/name
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "An entity's name"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/code
+  :db/ident :juxt.accounting/code
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "A code which can placed against any (datomic) entity"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/entity
+  :db/ident :juxt.accounting/entity
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/doc "A company, client, supplier or other organisations"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/registered-address
+  :db/ident :juxt.accounting/component
+  :db/valueType :db.type/ref
+  :db/cardinality :db.cardinality/many
+  :db/doc "A component of a transaction, such as VAT"
+  :db.install/_attribute :db.part/db}
+
+ {:db/id #db/id[:db.part/db]
+  :db/ident :juxt.accounting/registered-address
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "A entity's registered address, as an EDN vector of address lines"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/invoice-address
+  :db/ident :juxt.accounting/invoice-address
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "A postal address to use when sending invoices to an entity, as an EDN vector of address lines"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/invoice-addressee
+  :db/ident :juxt.accounting/invoice-addressee
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "The addressee to use when invoicing an entity"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/vat-number
+  :db/ident :juxt.accounting/vat-number
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "An organization's VAT number"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/account
+  :db/ident :juxt.accounting/account
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/doc "The containing account"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/account-number
+  :db/ident :juxt.accounting/account-number
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "An account's (bank) account number"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/sort-code
+  :db/ident :juxt.accounting/sort-code
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "An account's (bank) sort-code"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/debit
+  :db/ident :juxt.accounting/debit
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
   :db/doc "An account debit"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/credit
+  :db/ident :juxt.accounting/credit
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
   :db/doc "An account credit"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/date
+  :db/ident :juxt.accounting/date
   :db/valueType :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc "The date of a transaction"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/instance-of
+  :db/ident :juxt.accounting/instance-of
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/doc "A transaction can be an instance of a common transaction type, such as 'Full day consulting'"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/amount
+  :db/ident :juxt.accounting/amount
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
   :db/doc "The transaction amount"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/currency
+  :db/ident :juxt.accounting/currency
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "The currency, as a ISO-4217 currency code, that a transaction's amount is denoted in, or the currency of an account"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/invoice
+  :db/ident :juxt.accounting/invoice
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/doc "The invoice associated with an entry"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/invoice-ref
+  :db/ident :juxt.accounting/invoice-ref
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "An invoice's reference label"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/invoice-date
+  :db/ident :juxt.accounting/invoice-date
   :db/valueType :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc "The cut-off date up until which accrued items are collated for invoicing"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/issue-date
+  :db/ident :juxt.accounting/issue-date
   :db/valueType :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc "The date on which the invoice is issued"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/pdf-file
+  :db/ident :juxt.accounting/pdf-file
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "The path to the PDF file where the invoice is printed to"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/item
+  :db/ident :juxt.accounting/item
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/many
   :db/doc "An item, e.g. in an invoice"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/subtotal
+  :db/ident :juxt.accounting/subtotal
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
   :db/doc "A subtotal of an invoice"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/total
+  :db/ident :juxt.accounting/total
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
   :db/doc "A total of an invoice"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/output-tax
+  :db/ident :juxt.accounting/output-tax
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
   :db/doc "Output tax (UK VAT or sales tax) added to an invoice"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/output-tax-paid
+  :db/ident :juxt.accounting/output-tax-paid
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/doc "Output tax paid stamp (reference to VAT return entity)"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting.vat/box-6
+  :db/ident :juxt.accounting.vat/box-6
   :db/valueType :db.type/bigint
   :db/cardinality :db.cardinality/one
   :db/doc "Amount to put into box 6 on VAT return"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting.vat/box-1
+  :db/ident :juxt.accounting.vat/box-1
   :db/valueType :db.type/bigint
   :db/cardinality :db.cardinality/one
   :db/doc "Amount to put into box 1 on VAT return"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :pro.juxt.accounting/purchase-order-reference
+  :db/ident :juxt.accounting/purchase-order-reference
   :db/valueType :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc "The purchase order reference number associated with an invoice"

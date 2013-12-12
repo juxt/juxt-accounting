@@ -20,7 +20,7 @@
 ;; concentrating on getting things working rather than code style. I'll
 ;; re-factor it sometime, I promise, really I will....
 
-(ns pro.juxt.accounting.driver
+(ns juxt.accounting.driver
   (:require
    [clojurewerkz.money.amounts :as ma :refer (amount-of)]
    [clojure.pprint :refer (pprint)]
@@ -30,23 +30,19 @@
    [clojure.tools.logging :refer :all]
    [datomic.api :as d]
    [clj-time.core :as time]
-   [clojurewerkz.money.currencies :as mc :refer (GBP)]
+   [clj-time.coerce :refer (from-date)]
+   [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]
    [clojurewerkz.money.amounts :as ma]
-   [pro.juxt.accounting
+   [juxt.datomic.extras :refer (to-entity-map)]
+   [juxt.accounting
     [database :as db]
     [invoicing :as invoicing]
-    [money :refer (as-money)]
-    [util :refer (map-map)]])
-  (:import
-   (java.io File)
-   (org.joda.time DateTime)
-   (org.joda.money CurrencyUnit Money)))
+    [money :refer (as-money)]]
+)
+  )
 
-(defn load-transactions [conn {:keys [loader input source format columns] :or {format "application/edn" columns []} :as args}]
+#_(defn load-transactions [conn {:keys [loader input source format columns] :or {format "application/edn" columns []} :as args}]
   (infof "Loading transactions")
-  (infof "Requiring %s" (symbol (namespace loader)))
-  (infof "Bound root loader is %s" (.get clojure.lang.Compiler/LOADER))
-  (infof "Context class loader is %s" (.getContextClassLoader (Thread/currentThread)))
   (require (symbol (namespace loader)))
   (let [ldr (ns-resolve (symbol (namespace loader)) (symbol (name loader)))
         db (d/db conn)]
@@ -61,113 +57,164 @@
                         "text/tab-separated-values" (map (partial zipmap columns) (map #(str/split % #"\t") (line-seq (io/reader billing-file)))))]
         (let [bookentry (ldr db args billing)] ; should ldr be called transformer?
           (when bookentry
-            (infof "Creating transaction from book entry: %s" bookentry)
+            (debugf "Creating transaction from book entry: %s" bookentry)
             @(d/transact
               conn
-              (let [txid (d/tempid :db.part/tx)]
-                (concat
-                 (for [[n v] (:metadata bookentry)]
-                   [:db/add txid n v])
-                 (db/assemble-transaction
-                  db txid
-                  (or (:date bookentry) (:date billing))
-                  [{:debit-account (:debit-account bookentry)
-                    :credit-account (:credit-account bookentry)
-                    :amount (:amount bookentry)
-                    :description (:description bookentry)}]))))))))))
+              (concat
+               (for [[n v] (:metadata bookentry)]
+                 [:db/add txid n v])
+               (db/assemble-transaction
+                db
+                (or (:date bookentry) (:date billing))
+                [{:debit-account (:debit-account bookentry)
+                  :credit-account (:credit-account bookentry)
+                  :amount (:amount bookentry)
+                  :description (:description bookentry)}]
+                "load-transactions")))))))))
 
 
 (defn process-accounts-file [path dburi]
   (let [fl (file path)
         {:keys [entities accounts transactions invoices vat-returns]}
         (edn/read-string
-         {:readers {'pro.juxt.accounting/currency
-                    (fn [x] (CurrencyUnit/getInstance (str x)))}}
+         {:readers {'juxt.accounting/currency
+                    (fn [x] (to-currency-unit (str x)))}}
          (slurp fl))]
 
     (let [conn (d/connect dburi)]
       (infof "dburi is %s" dburi)
       (infof "conn is %s, type %s" conn (type conn))
-      (doseq [[ident {:keys [name code vat-no registered-address invoice-address invoice-addressee]}] entities]
-        (db/create-legal-entity!
-         conn
-         :ident ident
-         :name name
-         :code code
-         :vat-no vat-no
-         :registered-address registered-address
-         :invoice-address (or invoice-address registered-address)
-         :invoice-addressee invoice-addressee))
+      (doseq [[ident {:keys [name code vat-no registered-address invoice-address invoice-addressee client supplier]}] entities]
+        (do
+          (db/create-legal-entity!
+           conn
+           :ident ident
+           :name name
+           :code code
+           :vat-no vat-no
+           :registered-address registered-address
+           :invoice-address (or invoice-address registered-address)
+           :invoice-addressee invoice-addressee)
+          (when client
+            (db/create-account!
+             conn
+             :ident (keyword (clojure.core/name ident) "accounts-receivable")
+             :entity ident
+             :currency (to-currency-unit "GBP")
+             :name "Accounts Receivable"
+             )
+            (db/create-account!
+             conn
+             :ident (keyword (clojure.core/name ident) "assets-pending-invoice")
+             :entity ident
+             :currency (to-currency-unit "GBP")
+             :name "Billable work"
+             ))
+          (when supplier
+            (db/create-account!
+             conn
+             :ident (keyword (clojure.core/name ident) "accounts-payable")
+             :entity ident
+             :currency (to-currency-unit "GBP")
+             :name "Accounts Receivable"
+             )
+            (db/create-account!
+             conn
+             :ident (keyword (clojure.core/name ident) "liabilities")
+             :entity ident
+             :currency (to-currency-unit "GBP")
+             :name "Billable work"
+             ))))
 
-      (doseq [[ident {:keys [entity currency account-no sort-code]}] accounts]
+      (doseq [{:keys [ident name entity currency account-no sort-code]} accounts]
         (db/create-account!
          conn
          :ident ident
+         :name name
          :entity entity
          :currency currency
          :account-no account-no
          :sort-code sort-code
          ))
 
-      (doseq [tx transactions]
-        (cond
-         (and (vector? tx) (= (first tx) :load))
-         (load-transactions conn (assoc (second tx) :source fl))
+      (doseq [{:keys [credit-account debit-account items]} transactions]
 
-         (and (map? tx) (:amount tx))
-         @(d/transact
-           conn
-           (let [txid (d/tempid :db.part/tx)
-                 db (d/db conn)]
-             (concat
-              (list
-               [:db/add txid :pro.juxt/description (:description tx)])
-              (db/assemble-transaction
-               db txid
-               (:date tx)
-               [{:debit-account (:debit-account tx)
-                 :credit-account (:credit-account tx)
-                 :amount (as-money (:amount tx) (:currency tx))
-                 :description (:description tx)}]
-               ))))
+        (let [db (d/db conn)]
+          @(d/transact
+            conn
+            (apply concat
+                   (for [{:keys [dates description unit-amount vat-rate]} items]
+                     (apply concat
+                            (for [date dates]
+                              (db/assemble-transaction
+                               (d/db conn)
+                               date
+                               (remove nil?
+                                       [{:debit-account debit-account
+                                         :credit-account credit-account
+                                         :description description
+                                         :amount unit-amount
+                                         }])
+                               "transaction loaded from file"))))))))
 
-         (and (map? tx) (:transactions tx))
-         @(d/transact
-           conn
-           (let [txid (d/tempid :db.part/tx)
-                 db (d/db conn)]
-             (db/assemble-transaction
-              db txid
-              (:date tx)
-              (map (fn [entry]
-                     (infof "entry is %s" entry)
-                     (map-map entry {:debit-account :debit-account
-                                     :credit-account :credit-account
-                                     :description :description
-                                     :amount #(as-money (:amount %) (:pro.juxt.accounting/currency (db/to-entity-map (:debit-account %) db)))
-                                     }))
-                   (:transactions tx)))))
+      #_(doseq [tx transactions]
+          (cond
+           (and (vector? tx) (= (first tx) :load))
+           (load-transactions conn (assoc (second tx) :source fl))
 
-         :otherwise
-         (throw (ex-info "Don't know how to handle tx" {:tx tx}))))
+           (and (map? tx) (:amount tx))
+           @(d/transact
+             conn
+             (let [db (d/db conn)]
+               (concat
+                (list
+                 [:db/add txid :juxt/description (:description tx)])
+                (db/assemble-transaction
+                 db
+                 (:date tx)
+                 [{:debit-account (:debit-account tx)
+                   :credit-account (:credit-account tx)
+                   :amount (as-money (:amount tx) (:currency tx))
+                   :description (:description tx)}]
+                 ))))
+
+           (and (map? tx) (:transactions tx))
+           @(d/transact
+             conn
+             (let [db (d/db conn)]
+               (db/assemble-transaction
+                db
+                (:date tx)
+                (map (fn [entry]
+                       (spider entry {:debit-account :debit-account
+                                      :credit-account :credit-account
+                                      :description :description
+                                      :amount #(as-money (:amount %)
+                                                         (:juxt.accounting/currency (to-entity-map (:debit-account %) db)))
+                                      }))
+                     (:transactions tx))
+                "driver")))
+
+           :otherwise
+           (throw (ex-info "Don't know how to handle tx" {:tx tx}))))
 
       (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
+        (infof "Preparing invoice")
         (let [db (d/db conn)
               company (d/entity db issuer)
-              {accno :pro.juxt.accounting/account-number sort-code :pro.juxt.accounting/sort-code} (db/to-entity-map receiving-account db)
+              {accno :juxt.accounting/account-number sort-code :juxt.accounting/sort-code} (to-entity-map receiving-account db)
               templater (invoicing/create-invoice-data-template
                          ;; TODO: All these fields are part of the issuer
                          {:title "Director"
-                          :notes (str "Please make payment via BACS to our bank (account " accno ", sort-code " sort-code ") within 30 days.\nMany thanks.")
                           :signatory signatory
-                          :company-name (:pro.juxt.accounting/name company)
-                          :company-address (edn/read-string (:pro.juxt.accounting/registered-address company))
-                          :vat-no (:pro.juxt.accounting/vat-number company)
+                          :company-name (:juxt.accounting/name company)
+                          :company-address (edn/read-string (:juxt.accounting/registered-address company))
+                          :vat-no (:juxt.accounting/vat-number company)
                           :vat-rate output-tax-rate
                           :bank-account-no accno
                           :bank-sort-code sort-code
                           })
-              code (:pro.juxt.accounting/code (d/entity db entity))
+              code (:juxt.accounting/code (d/entity db entity))
               invoice
               (invoicing/issue-invoice
                conn
@@ -177,13 +224,14 @@
                :output-tax-rate output-tax-rate
                :invoice-date invoice-date
                :issue-date issue-date
-               :invoice-ref-prefix (format "%s-%s-" code (.getYear (DateTime. invoice-date)))
+               :invoice-ref-prefix (format "%s-%s-" code (time/year (from-date invoice-date)))
                :initial-invoice-suffix "01"
                :purchase-order-reference purchase-order-reference)
               ;; We need to reparent the value of output-dir relative to the file it is specified in.
               invoice-args (update-in invoice-args [:output-dir]
-                                      #(.getAbsolutePath (File. (.getParentFile fl) %)))
+                                      #(.getAbsolutePath (file (.getParentFile fl) %)))
               invoice-data (templater (d/db conn) invoice invoice-args)]
+          (infof "Invoice data: %s" invoice-data)
           (invoicing/generate-pdf-for-invoice conn invoice-data)
           ))
 
@@ -238,18 +286,22 @@
               (let [db (d/db conn)]
                 @(d/transact
                   conn
-                  (let [returnid (d/tempid :db.part/user)
-                        txid (d/tempid :db.part/tx)]
+                  (let [returnid (d/tempid :db.part/user)]
                     (concat
                      (for [invoice invoices]
-                       [:db/add invoice :pro.juxt.accounting/output-tax-paid returnid])
+                       [:db/add invoice :juxt.accounting/output-tax-paid returnid])
                      (list
-                      [:db/add returnid :pro.juxt.accounting/date date]
-                      [:db/add returnid :pro.juxt.accounting.vat/box-6 (BigInteger/valueOf (long (Math/floor total)))]
-                      [:db/add returnid :pro.juxt.accounting.vat/box-1 (BigInteger/valueOf (long (.getAmount owing)))])
+                      [:db/add returnid :juxt.accounting/date date]
+
+                      ;; Err. surely these is EXCLUDING VAT!! (for JUXT at least) but could be different for FRS
+                      ;; Don't floor it either, it's meant to be in pounds and pence!
+                      ;; Err, box 1 is in pounds and pence, box 6 in pounds only
+                      [:db/add returnid :juxt.accounting.vat/box-6 (BigInteger/valueOf (long (Math/floor total)))]
+
+                      [:db/add returnid :juxt.accounting.vat/box-1 (BigInteger/valueOf (long (.getAmount owing)))])
 
                      (db/assemble-transaction
-                      db txid
+                      db
                       (db/to-date date)
                       (let [a {:debit-account vat-account
                                :credit-account credit-account
@@ -261,4 +313,5 @@
                               :amount keep
                               :description "Retained VAT"
                               }]
-                          [a]))))))))))))))
+                          [a]))
+                      "driver"))))))))))))

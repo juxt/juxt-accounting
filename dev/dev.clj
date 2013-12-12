@@ -24,7 +24,7 @@
    [clojure.pprint :refer (pprint)]
    [clojure.repl :refer :all]
    [clojure.tools.namespace.repl :refer (refresh refresh-all)]
-   [pro.juxt.accounting
+   [juxt.accounting
     [database :as db]
     [service :as service]
     [system :as system]

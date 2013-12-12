@@ -26,7 +26,7 @@ To start the system :-
 
 ## Examples
 
-A example of using the API can be found in the file ```test/pro/juxt/accounting/example.clj```.
+A example of using the API can be found in the file ```test/juxt/accounting/example.clj```.
 
 ## Scope
 

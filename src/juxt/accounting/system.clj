@@ -16,9 +16,9 @@
 ;;
 
 (ns ^{:doc "See http://thinkrelevance.com/blog/2013/06/04/clojure-workflow-reloaded"}
-  pro.juxt.accounting.system
+  juxt.accounting.system
   (:require
-   [pro.juxt.accounting
+   [juxt.accounting
     [database :as db]
     [driver :refer (process-accounts-file)]]
    [datomic.api :as d]

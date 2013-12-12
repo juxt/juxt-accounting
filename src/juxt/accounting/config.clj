@@ -14,12 +14,8 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns pro.juxt.accounting.util
-  (:require
-   [datomic.api :as d]))
+(ns juxt.accounting.config
+  (:require [clojure.java.io :as io]))
 
-(defn map-map
-  "Map (verb) a map (noun). Create a map from a value by applying the
-  functions in the values of m to x."
-  [x m]
-  (reduce-kv (fn [s k v] (assoc s k (v x))) {} m))
+(defn config []
+  {:dburi "datomic:mem://juxt/accounting"})

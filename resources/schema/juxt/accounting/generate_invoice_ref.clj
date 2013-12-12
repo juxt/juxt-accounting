@@ -5,12 +5,12 @@
 ;; relationships are only forward-traversable, this isn't quite
 ;; core.logic magic!
 
-[[:db/add invoice :pro.juxt.accounting/invoice-ref
+[[:db/add invoice :juxt.accounting/invoice-ref
   (let [s (ffirst
            (datomic.api/q
             '[:find ?np :in $ ?prefix ?init
               :where
-              [_ :pro.juxt.accounting/invoice-ref ?ref]
+              [_ :juxt.accounting/invoice-ref ?ref]
               [(.startsWith ^String ?ref ?prefix)]
               [(count ?prefix) ?len]
               [(.substring ^String ?ref ?len) ?s]
