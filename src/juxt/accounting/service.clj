@@ -179,22 +179,68 @@
      )))
 
 (defn vat-ledger? [records]
-  (every? (every-pred #(= 2 (count %))) records))
+  (every? (every-pred
+           #(= 2 (count %))
+           #(= #{:net :vat} (set (map :component-type %)))) records))
 
-(defn to-ledger-view [db entries url-for]
-  [:pre (with-out-str (clojure.pprint/pprint entries))]
-  #_(->> entries (map first) (sort-by :date)
-       (to-table {:column-order (explicit-column-order :date :description :other-account)
-                  :hide-columns #{:entry :type :account :id}
-                  :formatters {:date (comp date-formatter :date)
-                               :value (fn [{:keys [value other-account]}]
-                                        (moneyformat value java.util.Locale/UK))
+(defn single-component-records? [records]
+  (every? #(= 1 (count %)) records))
 
-                               :other-account
-                               (fn [{:keys [other-account]}]
-                                 [:a {:href (url-for ::account-page :params {:account (keyword-formatter (:db/ident other-account))})} (apply format "%s/%s" ((juxt namespace name) (:db/ident other-account)))])}
-                  :classes {:value "numeric"}
-                  })))
+(defn uk-money-format [value]
+  (moneyformat value java.util.Locale/UK))
+
+(defn account-link2 [url-for acct text]
+  [:a {:href (url-for ::account-page :params {:account (keyword-formatter (:db/ident acct))})} text])
+
+(defn to-vat-ledger [url-for records]
+  (to-table
+   {:column-order (explicit-column-order :date :description :txdesc :net :other-account :vat :total)
+    :hide-columns #{:other-account :vat-account}
+    :formatters
+    {:date (comp date-formatter :date)
+     :net (comp (partial apply account-link2 url-for) (juxt :other-account (comp uk-money-format :net)))
+     :vat (comp (partial apply account-link2 url-for) (juxt :vat-account (comp uk-money-format :vat)))
+     :total (comp uk-money-format :total)
+     }
+    :classes
+    {:net "numeric"
+     :vat "numeric"
+     :total "numeric"}}
+
+   (let [order [:net :vat]]
+     (for [rec (map (comp (partial zipmap order)
+                          #(sort-by (comp (into {} (map vector order (range)))
+                                          :component-type)
+                                    %))
+                    records)]
+       (reduce-kv
+        (fn [acc k v] (assoc acc k (v rec)))
+        {}
+        {:date #(get-in % [:net :date])
+         :description #(get-in % [:net :description])
+         :txdesc #(get-in % [:net :txdesc])
+         :net #(get-in % [:net :value])
+         :other-account #(get-in % [:net :other-account])
+         :vat #(get-in % [:vat :value])
+         :vat-account #(get-in % [:vat :other-account])
+         :total #(total [(get-in % [:net :value]) (get-in % [:vat :value])])
+         })))))
+
+(defn to-ledger-view [db records url-for]
+  (cond
+   (vat-ledger? records)
+   (to-vat-ledger url-for (sort-by (comp :date first) records))
+   (single-component-records? records)
+   (->> records (map first) (sort-by :date)
+        (to-table {:column-order (explicit-column-order :date :description :other-account)
+                   :hide-columns #{:entry :type :account :id :other-account}
+                   :formatters {:date (comp date-formatter :date)
+                                :value (fn [{:keys [value other-account]}]
+                                         (account-link2 url-for other-account (moneyformat value java.util.Locale/UK)))}
+                   :classes {:value "numeric"}}))
+   :otherwise
+   [:pre (with-out-str (clojure.pprint/pprint records))])
+  )
 
 (defbefore account-page
   [{:keys [request system url-for component] :as context}]
