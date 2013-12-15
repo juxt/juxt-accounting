@@ -63,7 +63,7 @@
       :content (constantly (html (cons (when title [:h2 title]) content)))
       :home-href (url-for ::index-page)
       :app-name "JUXT Accounting"
-      :title (or title "")
+      :title (or title "JUXT Accounting")
       :menu (for [[name link] menu]
               {:listitem
                (html [:li (when (= route-name link) {:class "active"})
