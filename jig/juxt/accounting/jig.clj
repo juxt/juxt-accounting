@@ -72,7 +72,9 @@
   (start [_ system]
     (infof "Initializing Website: %s" (:jig/id config))
     (let [dburi (get-in (jig.util/satisfying-dependency system config 'juxt.accounting.jig/Database)
-                        [:db :uri])]
+                        [:db :uri])
+          template-loader (get-in system [(:jig/id (jig.util/satisfying-dependency system config 'jig.stencil/StencilLoader)) :jig.stencil/loader])
+          ]
       (doseq [k [:bootstrap-dist :jquery-dist]]
         (when-not (is-directory (some-> config k io/file))
           (throw (ex-info (format "Dist dir for %s not valid: %s" (name k) (-> config k)) {}))))
@@ -84,5 +86,5 @@
           ;;(link-to-stencil-loader config)
 
           (add-bidi-routes config
-                           (create-bidi-routes (merge config {:dburi dburi}))))))
+                           (create-bidi-routes (merge config {:dburi dburi :template-loader template-loader}))))))
   (stop [_ system] system))

@@ -44,30 +44,6 @@
    [clojurewerkz.money.amounts :as ma :refer (total)]
    [clojurewerkz.money.format :refer (format) :rename {format moneyformat}]))
 
-#_(defn render-page [request content]
-  (let [route-name (-> request :route :route-name)
-        title (ffirst
-               (filter #(= route-name (second %)) menu))]
-    (stencil/render
-     (get-template system component "templates/page.html")
-     {:ctx (let [ctx (get-in context [:component :jig.web/context])]
-             (if (= ctx "/") "" ctx))
-      :content (constantly (html (cons (when title [:h2 title]) content)))
-      :home-href (url-for ::index-page)
-      :app-name "JUXT Accounting"
-      :title (or title "JUXT Accounting")
-      :menu (for [[name link] menu]
-              {:listitem
-               (html [:li (when (= route-name link) {:class "active"})
-                      [:a {:href (url-for link)} name]])})})))
-
-#_(defn page-response [{:keys [url-for system] :as context} & content]
-  (assoc context :response
-         (ring-resp/response
-          (render-page
-           context
-           content))))
-
 (defn css-page [req]
   (-> (css
        [:h1 :h2 :h3 {:color (rgb 0 0 154)}]
@@ -78,21 +54,7 @@
       (ring-resp/content-type "text/css")))
 
 (defn index-page [request]
-  (ring-resp/response (html [:h1 "Welcome to JUXT Accounts"]))
-  #_(page-response
-   context
-   [:h1 "Welcome to JUXT Accounts"]
-   [:ul
-    (for [[title link] menu]
-      [:li [:a {:href (url-for link)} title]])]
-
-   ;;[:pre (with-out-str (pprint (:route context)))]
-   ))
-
-#_(defbefore root-page
-  [{:keys [request system url-for] :as context}]
-  (assoc context :response
-         (ring-resp/redirect (url-for ::index-page))))
+  (ring-resp/response (html [:h1 "Welcome to JUXT Accounts"])))
 
 ;; Don't spend too much work on this, it's just a service and rendering
 ;; will be done in the Pedestal app.
@@ -136,14 +98,8 @@
   {:pre [(instance? java.util.Date d)]}
   (.format (java.text.SimpleDateFormat. "y-MM-dd") d))
 
-#_(defbefore views-page
-  [{:keys [request system url-for component] :as context}]
-  (page-response
-   context))
-
 (defn account-link [routes target account]
-  [:a {:href (path-for routes target :account (keyword-formatter account))} (keyword-formatter account)]
-)
+  [:a {:href (path-for routes target :account (keyword-formatter account))} (keyword-formatter account)])
 
 (defn accounts-page [dburi account-page]
   (fn [req]
@@ -255,43 +211,39 @@
                    [:h3 title]
                    (to-ledger-view db this entries (:jig.bidi/routes req))
                    (when (pos? (count entries))
-                     [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])
-
-                   ))))))))
+                     [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])))))))))
 
 #_(defbefore clients-page
   [{:keys [request system url-for component] :as context}]
   (page-response
    context))
 
+(defn invoices-page [dburi target]
+  (let [db (d/db (d/connect dburi))]
+    (fn this [req]
+      (let [routes (:jig.bidi/routes req)
+            invoices (db/get-invoices db)]
+        (->> invoices
+             (to-table
+              {:formatters
+               {:invoice-ref
+                (fn [x] [:a {:href (path-for routes target :invoice-ref (:invoice-ref x))} (:invoice-ref x)])
+                :invoice-date (comp date-formatter :invoice-date)
+                :issue-date (comp date-formatter :issue-date)
+                :output-tax-paid #(some-> % :output-tax-paid :juxt.accounting/date date-formatter)
 
-#_(defbefore invoices-page
-  [{:keys [request system url-for component] :as context}]
-  (let [dburi (get-dburi context)
-        db (d/db (d/connect dburi))]
-    (page-response
-     context
-     (let [invoices (db/get-invoices db)]
-       (->> invoices
-            (to-table {:formatters {:invoice-ref (fn [x] [:a {:href (url-for ::invoice-pdf-page :params {:invoice-ref (:invoice-ref x)})} (:invoice-ref x)])
-                                    :invoice-date (comp date-formatter :invoice-date)
-                                    :issue-date (comp date-formatter :issue-date)
-                                    :output-tax-paid #(some-> % :output-tax-paid :juxt.accounting/date date-formatter)
+                }
+               :hide-columns #{:invoice :items}
+               :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))))
 
-                                    }
-                       :hide-columns #{:invoice :items}
-                       :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))))
-
-#_(defbefore invoice-pdf-page
-  [{:keys [request system] :as context}]
-  (let [dburi (get-dburi context)
-        db (d/db (d/connect dburi))
-        invoice-ref (get-in request [:path-params :invoice-ref])
-        invoice (db/find-invoice-by-ref db invoice-ref)]
-    (assoc context :response
-           (-> (ring-resp/response
-                (io/input-stream (:juxt.accounting/pdf-file (to-entity-map invoice db))))
-               (ring-resp/content-type "application/pdf")))))
+(defn invoice-pdf-page [dburi]
+  (fn [req]
+    (let [db (d/db (d/connect dburi))
+          invoice-ref (get-in req [:route-params :invoice-ref])
+          invoice (db/find-invoice-by-ref db invoice-ref)]
+      (-> (ring-resp/response
+                     (io/input-stream (:juxt.accounting/pdf-file (to-entity-map invoice db))))
+          (ring-resp/content-type "application/pdf")))))
 
 #_(defbefore vat-returns-page
   [{:keys [request system url-for component] :as context}]
@@ -323,14 +275,19 @@
                    (wrap-content-type options))))
   (unresolve-handler [this m] nil))
 
-(defn boilerplate [h]
+(defn boilerplate [template-loader menu h]
   (fn [req]
-    (->
-     (h req)
-     html
-     ring-resp/response
-     (ring-resp/content-type "text/html")
-     (ring-resp/charset "utf-8"))))
+    (let [routes (:jig.bidi/routes req)]
+      (let [content (-> (h req) html)]
+        (->
+         (stencil/render (template-loader "templates/page.html")
+                  {:title "JUXT Accounting"
+                   :content content
+                   :menu (for [[label handler] menu]
+                           {:listitem (html [:li [:a {:href (path-for routes handler)} label]])})})
+         ring-resp/response
+         (ring-resp/content-type "text/html")
+         (ring-resp/charset "utf-8"))))))
 
 (defn hiccup-debug [h]
   (fn [req]
@@ -342,20 +299,38 @@
      (ring-resp/content-type "text/plain")
      (ring-resp/charset "utf-8"))))
 
-(defn create-bidi-routes [{bootstrap-dist-dir :bootstrap-dist jquery-dist-dir :jquery-dist dburi :dburi}]
-  (infof "bootstrap dir is %s" bootstrap-dist-dir)
+(defn create-bidi-routes
+  [{bootstrap-dist-dir :bootstrap-dist
+    jquery-dist-dir :jquery-dist
+    dburi :dburi
+    template-loader :template-loader}]
 
   {:pre [(string? bootstrap-dist-dir)
-         (string? jquery-dist-dir)]}
+         (string? jquery-dist-dir)
+         (string? dburi)]}
 
   (let [account-page (account-page dburi)
-        accounts-page (accounts-page dburi account-page)]
+        accounts-page (accounts-page dburi account-page)
+        invoice-pdf-page (invoice-pdf-page dburi)
+        invoices-page (invoices-page dburi invoice-pdf-page)
+        menu [["Accounts" accounts-page]
+              ["Invoices" invoices-page]
+              ]]
     ["/" [
           ["" (->Redirect 307 index-page)]
           ["index" index-page]
 
-          ["" (->WrapMiddleware [["accounts" accounts-page]
-                                 [["accounts/" :account] account-page]] boilerplate)]
+          ["accounts" (->Redirect 307 accounts-page)]
+          ["invoices" (->Redirect 307 invoices-page)]
+
+          [["invoice-pdfs/" :invoice-ref] invoice-pdf-page]
+
+          ["" (->WrapMiddleware
+               [["accounts/" accounts-page]
+                [["accounts/" :account] account-page]
+                ["invoices/" invoices-page]
+                ]
+               (partial boilerplate template-loader menu))]
 
           ["style.css" css-page]
 
@@ -363,11 +338,6 @@
           ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
           ]])
   #_[
-     ["/accounts" {:get accounts-page}]
-     ["/accounts/*account" {:get account-page}]
-     ["/invoices" {:get invoices-page}]
      ["/invoice-pdfs/:invoice-ref" {:get invoice-pdf-page}]
      ["/vat-returns" {:get vat-returns-page}]
-     ["/jquery/*path" {:get (resources ::jquery-resources jquery-dist-dir)}]
-
      ])
