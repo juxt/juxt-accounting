@@ -21,15 +21,11 @@
    [ring.util
     [response :as ring-resp]
     [codec :as codec]]
-   #_[jig
-    [stencil :refer (get-template)]]
    [bidi.bidi :refer (->Redirect ->WrapMiddleware path-for)]
    [hiccup.core :refer (html h)]
-
    [ring.util.response :refer (file-response)]
    [ring.middleware.content-type :refer (wrap-content-type)]
    [ring.middleware.file-info :refer (wrap-file-info)]
-
    [clojure.pprint :refer (pprint)]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -59,7 +55,6 @@
 ;; Don't spend too much work on this, it's just a service and rendering
 ;; will be done in the Pedestal app.
 ;; column order is really just a hack to get balances on the right
-
 (defn to-table
   ([{:keys [column-order hide-columns formatters classes] :or {column-order (constantly 0)} :as options} rows]
      (if-not (empty? rows)
@@ -213,11 +208,6 @@
                    (when (pos? (count entries))
                      [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])))))))))
 
-#_(defbefore clients-page
-  [{:keys [request system url-for component] :as context}]
-  (page-response
-   context))
-
 (defn invoices-page [dburi target]
   (let [db (d/db (d/connect dburi))]
     (fn this [req]
@@ -245,25 +235,13 @@
                      (io/input-stream (:juxt.accounting/pdf-file (to-entity-map invoice db))))
           (ring-resp/content-type "application/pdf")))))
 
-#_(defbefore vat-returns-page
-  [{:keys [request system url-for component] :as context}]
-  (let [dburi (get-dburi context)
-        db (d/db (d/connect dburi))]
-    (page-response
-     context
-     (let [returns (db/get-vat-returns db)]
-       (->> returns
-            (to-table {:formatters {:date (comp date-formatter :date)}
-                       :column-order (explicit-column-order :date :box1 :box6)}))))))
-
-#_(definterceptorfn resources
-  [name root-path & [opts]]
-  (handler
-   name
-   (fn [req]
-     (ring-resp/file-response
-      (codec/url-decode (get-in req [:path-params :path]))
-      {:root root-path, :index-files? true, :allow-symlinks? false}))))
+(defn vat-returns-page [dburi]
+  (fn [req]
+    (let [db (d/db (d/connect dburi))]
+      (let [returns (db/get-vat-returns db)]
+        (->> returns
+             (to-table {:formatters {:date (comp date-formatter :date)}
+                        :column-order (explicit-column-order :date :box1 :box6)}))))))
 
 ;; TODO - use the one in the latest bidi release
 (defrecord Files [options]
@@ -313,31 +291,31 @@
         accounts-page (accounts-page dburi account-page)
         invoice-pdf-page (invoice-pdf-page dburi)
         invoices-page (invoices-page dburi invoice-pdf-page)
+        vat-returns-page (vat-returns-page dburi)
+
         menu [["Accounts" accounts-page]
               ["Invoices" invoices-page]
-              ]]
-    ["/" [
-          ["" (->Redirect 307 index-page)]
-          ["index" index-page]
+              ["VAT Returns" vat-returns-page]]]
+    ["/"
+     [
+      ["" (->Redirect 307 index-page)]
+      ["index" index-page]
 
-          ["accounts" (->Redirect 307 accounts-page)]
-          ["invoices" (->Redirect 307 invoices-page)]
+      ["accounts" (->Redirect 307 accounts-page)]
+      ["invoices" (->Redirect 307 invoices-page)]
 
-          [["invoice-pdfs/" :invoice-ref] invoice-pdf-page]
+      [["invoice-pdfs/" :invoice-ref] invoice-pdf-page]
 
-          ["" (->WrapMiddleware
-               [["accounts/" accounts-page]
-                [["accounts/" :account] account-page]
-                ["invoices/" invoices-page]
-                ]
-               (partial boilerplate template-loader menu))]
+      ["" (->WrapMiddleware
+           [["accounts/" accounts-page]
+            [["accounts/" :account] account-page]
+            ["invoices/" invoices-page]
+            ["vat-returns/" vat-returns-page]
+            ]
+           (partial boilerplate template-loader menu))]
 
-          ["style.css" css-page]
+      ["style.css" css-page]
 
-          ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]
-          ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
-          ]])
-  #_[
-     ["/invoice-pdfs/:invoice-ref" {:get invoice-pdf-page}]
-     ["/vat-returns" {:get vat-returns-page}]
-     ])
+      ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]
+      ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
+      ]]))
