@@ -261,8 +261,9 @@
          (stencil/render (template-loader "templates/page.html")
                   {:title "JUXT Accounting"
                    :content content
+                   :app-name "JUXT Accounting"
                    :menu (for [[label handler] menu]
-                           {:listitem (html [:li [:a {:href (path-for routes handler)} label]])})})
+                           {:listitem (html [:li (when (= (:uri req) (path-for routes handler)) {:class "active"}) [:a {:href (path-for routes handler)} label]])})})
          ring-resp/response
          (ring-resp/content-type "text/html")
          (ring-resp/charset "utf-8"))))))
