@@ -176,8 +176,8 @@
 (defn uk-money-format [value]
   (moneyformat value java.util.Locale/UK))
 
-(defn account-link2 [url-for acct text]
-  [:a {:href (url-for ::account-page :params {:account (keyword-formatter (:db/ident acct))})} text])
+(defn account-link2 [routes target acct text]
+  [:a {:href (path-for routes target :account acct)} text])
 
 (defn to-vat-ledger [url-for records]
   (to-table
@@ -213,24 +213,23 @@
          :total #(total [(get-in % [:net :value]) (get-in % [:vat :value])])
          })))))
 
-(defn to-ledger-view [db records url-for]
+(defn to-ledger-view [db target records routes]
   (cond
    (vat-ledger? records)
-   (to-vat-ledger url-for (sort-by (comp :date first) records))
+   (comment (to-vat-ledger url-for (sort-by (comp :date first) records)))
    (single-component-records? records)
    (->> records (map first) (sort-by :date)
         (to-table {:column-order (explicit-column-order :date :description :other-account)
-                   :hide-columns #{:entry :type :account :id :other-account}
+                   :hide-columns #{:entry :type :account :id :other-account :invoice-item}
                    :formatters {:date (comp date-formatter :date)
                                 :value (fn [{:keys [value other-account]}]
-                                         (account-link2 url-for other-account (moneyformat value java.util.Locale/UK)))}
+                                         (account-link2 routes target (keyword-formatter (:db/ident other-account)) (moneyformat value java.util.Locale/UK)))}
                    :classes {:value "numeric"}}))
    :otherwise
-   [:pre (with-out-str (clojure.pprint/pprint records))])
-  )
+   [:pre (with-out-str (clojure.pprint/pprint records))]))
 
 (defn account-page [dburi]
-  (fn [req]
+  (fn this [req]
     (let [db (d/db (d/connect dburi))]
       (let [account (keyword (get-in req [:route-params :account]))
             details (to-entity-map account db)
@@ -239,10 +238,12 @@
               [:dl
                (for [[dt dd]
                      (map vector ["Id" "Currency" "Entity" "Balance"]
-                          (concat
-                           ((juxt (comp str :db/ident) :juxt.accounting/currency) details)
-                           ((juxt :juxt.accounting/name) entity)
-                           [(moneyformat (db/get-balance db account) java.util.Locale/UK)]))]
+                          (list
+                           (keyword-formatter (:db/ident details))
+                           (:juxt.accounting/currency details)
+                           (:juxt.accounting entity)
+                           (moneyformat (db/get-balance db account) java.util.Locale/UK)
+                           ))]
                  (list [:dt dt]
                        [:dd dd]))]
 
@@ -252,7 +253,7 @@
                       entries (map second (group-by :entry components))]
                   (list
                    [:h3 title]
-                   #_(to-ledger-view db entries url-for)
+                   (to-ledger-view db this entries (:jig.bidi/routes req))
                    (when (pos? (count entries))
                      [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])
 
@@ -329,6 +330,16 @@
      html
      ring-resp/response
      (ring-resp/content-type "text/html")
+     (ring-resp/charset "utf-8"))))
+
+(defn hiccup-debug [h]
+  (fn [req]
+    (->
+     (h req)
+     clojure.pprint/pprint
+     with-out-str
+     ring-resp/response
+     (ring-resp/content-type "text/plain")
      (ring-resp/charset "utf-8"))))
 
 (defn create-bidi-routes [{bootstrap-dist-dir :bootstrap-dist jquery-dist-dir :jquery-dist dburi :dburi}]
