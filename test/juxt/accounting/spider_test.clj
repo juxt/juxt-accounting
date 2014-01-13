@@ -17,11 +17,12 @@
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
 (ns juxt.accounting.spider-test
-  (:use clojure.test))
+  (:use clojure.test)
+  (:require [juxt.datomic.extras.spider :refer (spider)]))
 
 (deftest paths
   (are [row mapping => result]
-       (= result (crawl row mapping))
+       (= result (spider row mapping))
 
        {:P "A"} {:Q [:P]} => {:Q "A"}
        {:P "A" :B "B"} {:Q [:P]} => {:Q "A"}

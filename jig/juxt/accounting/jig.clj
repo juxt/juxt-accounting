@@ -17,19 +17,15 @@
 (ns juxt.accounting.jig
   (:require
    jig
-   [jig.web
-    [app :refer (add-routes)]
-    [stencil :refer (link-to-stencil-loader)]]
+   [jig.bidi :refer (add-bidi-routes)]
    [clojure.tools.logging :refer :all]
    [clojure.java.io :as io]
    [juxt.accounting
     [database :as db]
     [driver :refer (process-accounts-file)]
-    [service :refer (create-routes-terse)]
+    [service :refer (create-bidi-routes)]
     [ofx :as ofx]]
-   [datomic.api :as d]
-   [io.pedestal.service.http :as bootstrap]
-   [io.pedestal.service.http.body-params :as body-params])
+   [datomic.api :as d])
   (:import (jig Lifecycle)))
 
 (deftype Database [config]
@@ -70,20 +66,23 @@
 
 (def is-directory (every-pred identity (memfn exists) (memfn isDirectory)))
 
-(deftype PedestalService [config]
+(deftype Website [config]
   Lifecycle
-  (init [_ system]
-    (infof "Initialising PedestalService component: %s" (:jig/id config))
-    (doseq [k [:bootstrap-dist :jquery-dist]]
-      (when-not (is-directory (some-> config k io/file))
-        (throw (ex-info (format "Dist dir for %s not valid: %s" (name k) (-> config k)) {}))))
+  (init [_ system] system)
+  (start [_ system]
+    (infof "Initializing Website: %s" (:jig/id config))
+    (let [dburi (get-in (jig.util/satisfying-dependency system config 'juxt.accounting.jig/Database)
+                        [:db :uri])]
+      (doseq [k [:bootstrap-dist :jquery-dist]]
+        (when-not (is-directory (some-> config k io/file))
+          (throw (ex-info (format "Dist dir for %s not valid: %s" (name k) (-> config k)) {}))))
 
-    (-> system
-        (assoc-in [(:jig/id config) :data]
-                  (get-in system [:jig/config :jig/components (:juxt.accounting/data config)]))
+      (-> system
+          (assoc-in [(:jig/id config) :data]
+                    (get-in system [:jig/config :jig/components (:juxt.accounting/data config)]))
 
-        (link-to-stencil-loader config)
+          ;;(link-to-stencil-loader config)
 
-        (add-routes config (create-routes-terse (:bootstrap-dist config) (:jquery-dist config)))))
-  (start [_ system] system)
+          (add-bidi-routes config
+                           (create-bidi-routes (merge config {:dburi dburi}))))))
   (stop [_ system] system))

@@ -14,7 +14,7 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns juxt.accounting.test-database
+(ns juxt.accounting.database-test
   "Testing the database functions."
   (:refer-clojure :exclude [zero? read-string])
   (:require
@@ -60,7 +60,7 @@
     (is (= :test-account (:db/ident acc)))
     (is (= "Just for testing" (:juxt/description acc)))))
 
-(deftest test-create-transactions
+#_(deftest test-create-transactions
   (let [conn (d/connect dburi)
         owner (create-legal-entity! conn :ident :test-client)
         client (create-account! conn :parent :test-client :ident :client-x :currency GBP)

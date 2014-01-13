@@ -165,7 +165,7 @@
                              invoice-ref invoice-addressee invoice-address
                              client-name issuer currency purchase-order-reference
                              output-tax-rate]} out]
-  (infof "Printing invoice, number of items is %d" (count items))
+  (debugf "Printing invoice, number of items is %d" (count items))
   (let [currency-symbol (.getSymbol (as-currency currency))]
     (pdf
      [{:size :a4 :pages true}
@@ -289,7 +289,7 @@
   {:pre [(not (nil? invoice-ref))
          (not (nil? output-path))]}
   (let [f (file output-path)]
-    (infof "Printing PDF invoice to %s" f)
+    (debugf "Printing PDF invoice to %s" f)
     (print-invoice invoice-data (io/output-stream f))
     @(d/transact conn [[:db/add invoice :juxt.accounting/pdf-file output-path]])
     #_(if (.exists f)

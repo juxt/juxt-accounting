@@ -21,8 +21,7 @@
    [juxt.accounting
     [database :as db]
     [driver :refer (process-accounts-file)]]
-   [datomic.api :as d]
-   [io.pedestal.service.http :as bootstrap]))
+   [datomic.api :as d]))
 
 (defn system [config]
   (merge config {}))
@@ -30,12 +29,6 @@
 (defn start [system service-creator]
   (d/delete-database (-> system :db :uri))
   (db/init (-> system :db :uri))
-  (process-accounts-file (-> system :accounts-file) (-> system :db :uri))
-  (let [service (service-creator system)
-        service-instance (bootstrap/create-server service)]
-    (bootstrap/start service-instance)
-    (assoc system :pedestal {:service service
-                             :service-instance service-instance})))
+  (process-accounts-file (-> system :accounts-file) (-> system :db :uri)))
 
-(defn stop [system]
-  (bootstrap/stop (-> system :pedestal :service-instance)))
+(defn stop [system])

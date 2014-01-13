@@ -16,7 +16,7 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns juxt.accounting.test-ofx
+(ns juxt.accounting.ofx-test
   (:require
    [clojure.test :refer :all]
    [juxt.accounting.ofx :refer :all]

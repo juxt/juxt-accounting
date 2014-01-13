@@ -18,17 +18,18 @@
    [clojure.tools
     [trace :refer (deftrace)]
     [logging :refer :all]]
-   [io.pedestal.service.http :as bootstrap]
-   [io.pedestal.service.interceptor :refer (defbefore defhandler on-request defon-request definterceptorfn before handler)]
-   [io.pedestal.service.http.route :as route]
-   [io.pedestal.service.http.body-params :as body-params]
-   [io.pedestal.service.http.route.definition :refer (defroutes expand-routes)]
    [ring.util
     [response :as ring-resp]
     [codec :as codec]]
-   [jig.web
+   #_[jig
     [stencil :refer (get-template)]]
+   [bidi.bidi :refer (->Redirect ->WrapMiddleware path-for)]
    [hiccup.core :refer (html h)]
+
+   [ring.util.response :refer (file-response)]
+   [ring.middleware.content-type :refer (wrap-content-type)]
+   [ring.middleware.file-info :refer (wrap-file-info)]
+
    [clojure.pprint :refer (pprint)]
    [clojure.java.io :as io]
    [clojure.set :as set]
@@ -43,17 +44,8 @@
    [clojurewerkz.money.amounts :as ma :refer (total)]
    [clojurewerkz.money.format :refer (format) :rename {format moneyformat}]))
 
-(def menu
-  [
-   ;;["Views" ::views-page]
-   ["Accounts" ::accounts-page]
-   ;;["Clients" ::clients-page]
-   ["Invoices" ::invoices-page]
-   ["VAT Returns" ::vat-returns-page]
-   ])
-
-(defn render-page [{:keys [url-for system component] :as context} content]
-  (let [route-name (-> context :route :route-name)
+#_(defn render-page [request content]
+  (let [route-name (-> request :route :route-name)
         title (ffirst
                (filter #(= route-name (second %)) menu))]
     (stencil/render
@@ -69,27 +61,25 @@
                (html [:li (when (= route-name link) {:class "active"})
                       [:a {:href (url-for link)} name]])})})))
 
-(defn page-response [{:keys [url-for system] :as context} & content]
+#_(defn page-response [{:keys [url-for system] :as context} & content]
   (assoc context :response
          (ring-resp/response
           (render-page
            context
            content))))
 
-(defbefore css-page [context]
-  (assoc context
-    :response
-    (-> (ring-resp/response
-         (css
-          [:h1 :h2 :h3 {:color (rgb 0 0 154)}]
-          [:td {:font-family "monospace" :font-size (pt 12)}]
-          [:td.numeric {:text-align :right}]
-          [:th.numeric {:text-align :right}]))
-        (ring-resp/content-type "text/css"))))
+(defn css-page [req]
+  (-> (css
+       [:h1 :h2 :h3 {:color (rgb 0 0 154)}]
+       [:td {:font-family "monospace" :font-size (pt 12)}]
+       [:td.numeric {:text-align :right}]
+       [:th.numeric {:text-align :right}])
+      ring-resp/response
+      (ring-resp/content-type "text/css")))
 
-(defbefore index-page
-  [{:keys [url-for] :as context}]
-  (page-response
+(defn index-page [request]
+  (ring-resp/response (html [:h1 "Welcome to JUXT Accounts"]))
+  #_(page-response
    context
    [:h1 "Welcome to JUXT Accounts"]
    [:ul
@@ -99,7 +89,7 @@
    ;;[:pre (with-out-str (pprint (:route context)))]
    ))
 
-(defbefore root-page
+#_(defbefore root-page
   [{:keys [request system url-for] :as context}]
   (assoc context :response
          (ring-resp/redirect (url-for ::index-page))))
@@ -146,37 +136,34 @@
   {:pre [(instance? java.util.Date d)]}
   (.format (java.text.SimpleDateFormat. "y-MM-dd") d))
 
-(defbefore views-page
+#_(defbefore views-page
   [{:keys [request system url-for component] :as context}]
   (page-response
    context))
 
-(defn account-link [url-for a]
-  [:a {:href (url-for ::account-page :params {:account (keyword-formatter a)})} (keyword-formatter a)]
+(defn account-link [routes target account]
+  [:a {:href (path-for routes target :account (keyword-formatter account))} (keyword-formatter account)]
 )
 
-(defbefore accounts-page
-  [{:keys [request system url-for component] :as context}]
-  (let [dburi (get-dburi context)
-        db (d/db (d/connect dburi))]
-    (page-response
-     context
-     (let [accounts (db/get-accounts-as-table db)]
-       (list
-        (->> accounts
-             (sort-by :ident)
-             (map #(assoc %
-                     :balance (db/get-balance db (:ident %))
-                     :component-count (db/count-account-components db (:ident %))))
-             (remove (comp zero? :component-count))
-             (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
-                        :hide-columns #{:entity :component-count}
-                        :formatters {:ident (fn [x] (account-link url-for (:ident x)))
-                                     :balance #(moneyformat (:balance %) java.util.Locale/UK)}
-                        :classes {:balance :numeric}}))
-        #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]
-        ))
-     )))
+(defn accounts-page [dburi account-page]
+  (fn [req]
+    (infof "keys of request are %s" (keys req))
+    (let [db (d/db (d/connect dburi))]
+      (let [accounts (db/get-accounts-as-table db)]
+        (list
+         (->> accounts
+              (sort-by :ident)
+              (map #(assoc %
+                      :balance (db/get-balance db (:ident %))
+                      :component-count (db/count-account-components db (:ident %))))
+              (remove (comp zero? :component-count))
+              (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
+                         :hide-columns #{:entity :component-count}
+                         :formatters {:ident (fn [x] (account-link (:jig.bidi/routes req) account-page (:ident x)))
+                                      :balance #(moneyformat (:balance %) java.util.Locale/UK)}
+                         :classes {:balance :numeric}}))
+         #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]
+         )))))
 
 (defn vat-ledger? [records]
   (every? (every-pred
@@ -242,45 +229,42 @@
    [:pre (with-out-str (clojure.pprint/pprint records))])
   )
 
-(defbefore account-page
-  [{:keys [request system url-for component] :as context}]
-  (let [dburi (get-dburi context)
-        db (d/db (d/connect dburi))]
-    (page-response
-     context
-     (let [account (apply keyword (clojure.string/split (get-in request [:path-params :account]) #"/"))
-           details (to-entity-map account db)
-           entity (to-entity-map (:juxt.accounting/entity details) db)]
-       (list [:h2 "Account"]
-             [:dl
-              (for [[dt dd]
-                    (map vector ["Id" "Currency" "Entity" "Balance"]
-                         (concat
-                          ((juxt (comp str :db/ident) :juxt.accounting/currency) details)
-                          ((juxt :juxt.accounting/name) entity)
-                          [(moneyformat (db/get-balance db account) java.util.Locale/UK)]))]
-                (list [:dt dt]
-                      [:dd dd]))]
+(defn account-page [dburi]
+  (fn [req]
+    (let [db (d/db (d/connect dburi))]
+      (let [account (keyword (get-in req [:route-params :account]))
+            details (to-entity-map account db)
+            entity (to-entity-map (:juxt.accounting/entity details) db)]
+        (list [:h2 "Account"]
+              [:dl
+               (for [[dt dd]
+                     (map vector ["Id" "Currency" "Entity" "Balance"]
+                          (concat
+                           ((juxt (comp str :db/ident) :juxt.accounting/currency) details)
+                           ((juxt :juxt.accounting/name) entity)
+                           [(moneyformat (db/get-balance db account) java.util.Locale/UK)]))]
+                 (list [:dt dt]
+                       [:dd dd]))]
 
-             (for [[title s type] [["Debits" "debits" :juxt.accounting/debit]
-                                   ["Credits" "crebits" :juxt.accounting/credit]]]
-               (let [components (db/get-account-components db account type)
-                     entries (map second (group-by :entry components))]
-                 (list
-                  [:h3 title]
-                  (to-ledger-view db entries url-for)
-                  (when (pos? (count entries))
-                    [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])
+              (for [[title s type] [["Debits" "debits" :juxt.accounting/debit]
+                                    ["Credits" "crebits" :juxt.accounting/credit]]]
+                (let [components (db/get-account-components db account type)
+                      entries (map second (group-by :entry components))]
+                  (list
+                   [:h3 title]
+                   #_(to-ledger-view db entries url-for)
+                   (when (pos? (count entries))
+                     [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])
 
-                  ))))))))
+                   ))))))))
 
-(defbefore clients-page
+#_(defbefore clients-page
   [{:keys [request system url-for component] :as context}]
   (page-response
    context))
 
 
-(defbefore invoices-page
+#_(defbefore invoices-page
   [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
@@ -297,7 +281,7 @@
                        :hide-columns #{:invoice :items}
                        :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))))
 
-(defbefore invoice-pdf-page
+#_(defbefore invoice-pdf-page
   [{:keys [request system] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))
@@ -308,7 +292,7 @@
                 (io/input-stream (:juxt.accounting/pdf-file (to-entity-map invoice db))))
                (ring-resp/content-type "application/pdf")))))
 
-(defbefore vat-returns-page
+#_(defbefore vat-returns-page
   [{:keys [request system url-for component] :as context}]
   (let [dburi (get-dburi context)
         db (d/db (d/connect dburi))]
@@ -319,7 +303,7 @@
             (to-table {:formatters {:date (comp date-formatter :date)}
                        :column-order (explicit-column-order :date :box1 :box6)}))))))
 
-(definterceptorfn resources
+#_(definterceptorfn resources
   [name root-path & [opts]]
   (handler
    name
@@ -328,23 +312,51 @@
       (codec/url-decode (get-in req [:path-params :path]))
       {:root root-path, :index-files? true, :allow-symlinks? false}))))
 
-(defn create-routes-terse [bootstrap-dist-dir jquery-dist-dir]
+;; TODO - use the one in the latest bidi release
+(defrecord Files [options]
+  bidi.bidi.Matched
+  (resolve-handler [this m]
+    (assoc (dissoc m :remainder)
+      :handler (-> (fn [req] (file-response (:remainder m) {:root (:dir options)}))
+                   (wrap-file-info (:mime-types options))
+                   (wrap-content-type options))))
+  (unresolve-handler [this m] nil))
+
+(defn boilerplate [h]
+  (fn [req]
+    (->
+     (h req)
+     html
+     ring-resp/response
+     (ring-resp/content-type "text/html")
+     (ring-resp/charset "utf-8"))))
+
+(defn create-bidi-routes [{bootstrap-dist-dir :bootstrap-dist jquery-dist-dir :jquery-dist dburi :dburi}]
+  (infof "bootstrap dir is %s" bootstrap-dist-dir)
+
   {:pre [(string? bootstrap-dist-dir)
          (string? jquery-dist-dir)]}
-  ["/" {:get root-page}
-   ^:interceptors
-   [(body-params/body-params)
-    bootstrap/html-body]
-   ["/index" {:get index-page}]
-   ["/style.css" {:get css-page}]
-;;   ["/views" {:get views-page}]
-   ["/accounts" {:get accounts-page}]
-   ["/accounts/*account" {:get account-page}]
-;;   ["/clients" {:get clients-page}]
-   ["/invoices" {:get invoices-page}]
-   ["/invoice-pdfs/:invoice-ref" {:get invoice-pdf-page}]
-   ["/vat-returns" {:get vat-returns-page}]
-   ["/bootstrap/*path" {:get (resources ::bootstrap-resources bootstrap-dist-dir)}]
-   ["/jquery/*path" {:get (resources ::jquery-resources jquery-dist-dir)}]
 
-   ])
+  (let [account-page (account-page dburi)
+        accounts-page (accounts-page dburi account-page)]
+    ["/" [
+          ["" (->Redirect 307 index-page)]
+          ["index" index-page]
+
+          ["" (->WrapMiddleware [["accounts" accounts-page]
+                                 [["accounts/" :account] account-page]] boilerplate)]
+
+          ["style.css" css-page]
+
+          ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]
+          ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
+          ]])
+  #_[
+     ["/accounts" {:get accounts-page}]
+     ["/accounts/*account" {:get account-page}]
+     ["/invoices" {:get invoices-page}]
+     ["/invoice-pdfs/:invoice-ref" {:get invoice-pdf-page}]
+     ["/vat-returns" {:get vat-returns-page}]
+     ["/jquery/*path" {:get (resources ::jquery-resources jquery-dist-dir)}]
+
+     ])

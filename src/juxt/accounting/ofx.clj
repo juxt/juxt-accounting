@@ -98,7 +98,7 @@
     (doseq [[acct transactions] (apply merge-with union (map extract-transactions (.listFiles dir)))]
       (if-let [acct (:ident (db/find-account db :account-no (:accno acct) :sort-code (:sort-code acct)))]
         (doseq [tx transactions]
-          (infof "tx is %s" tx)
+          (debugf "tx is %s" tx)
           (let [credit-account
                 (case (:type tx)
                   :debit (some->> (get-in account-mappings [(:name tx) :credit])
@@ -113,8 +113,8 @@
                                    :ident))]
             (if (and debit-account credit-account)
               (do
-                (infof "Credit account %s" credit-account)
-                (infof "Debit account %s" debit-account)
+                (debugf "Credit account %s" credit-account)
+                (debugf "Debit account %s" debit-account)
                 @(d/transact
                   (as-conn dburi)
                   (db/assemble-transaction

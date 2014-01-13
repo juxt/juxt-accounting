@@ -129,7 +129,7 @@
                                "transaction loaded from file"))))))))
 
       (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
-        (infof "Preparing invoice")
+        (debugf "Preparing invoice")
         (let [db (d/db conn)
               company (d/entity db issuer)
               {accno :juxt.accounting/account-number sort-code :juxt.accounting/sort-code} (to-entity-map receiving-account db)
@@ -161,7 +161,7 @@
               invoice-args (update-in invoice-args [:output-dir]
                                       #(.getAbsolutePath (file (.getParentFile fl) %)))
               invoice-data (templater (d/db conn) invoice invoice-args)]
-          (infof "Invoice data: %s" invoice-data)
+          (debugf "Invoice data: %s" invoice-data)
           (invoicing/generate-pdf-for-invoice conn invoice-data)
           ))
 
