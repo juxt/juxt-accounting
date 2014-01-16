@@ -29,6 +29,7 @@
                       "HMRC VAT" {:debit :juxt/vat-liability}
                       "MOORCROFTC" {:debit :moorcrofts/accounts-payable}
                       "DRW TRADING GROU" {:credit :drw/accounts-receivable}
+                      "CONGREVE COMPUTING" {:debit :drw/accounts-payable}
                       }}
 
 
