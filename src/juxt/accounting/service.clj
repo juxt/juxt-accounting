@@ -49,9 +49,6 @@
       ring-resp/response
       (ring-resp/content-type "text/css")))
 
-(defn index-page [request]
-  (ring-resp/response (html [:h1 "Welcome to JUXT Accounts"])))
-
 ;; Don't spend too much work on this, it's just a service and rendering
 ;; will be done in the Pedestal app.
 ;; column order is really just a hack to get balances on the right
@@ -299,8 +296,7 @@
               ["VAT Returns" vat-returns-page]]]
     ["/"
      [
-      ["" (->Redirect 307 index-page)]
-      ["index" index-page]
+      ["" (->Redirect 307 accounts-page)]
 
       ["accounts" (->Redirect 307 accounts-page)]
       ["invoices" (->Redirect 307 invoices-page)]
