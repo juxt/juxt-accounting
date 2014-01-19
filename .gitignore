@@ -11,6 +11,4 @@ pom.xml.asc
 .lein-plugins
 .lein-repl-history
 /todo.org
-/config.edn
 /.nrepl-port
-/config.clj
