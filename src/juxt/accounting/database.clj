@@ -156,6 +156,7 @@
        (get-accounts db)))
 
 (defn find-account [db & {:as keyvals}]
+  {:post [%]}
   (let [squash-sort-code        ; to avoid inequality due to punctuation
         (fn [m]
           (if (:sort-code m)
