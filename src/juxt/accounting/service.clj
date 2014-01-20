@@ -147,8 +147,8 @@
     :hide-columns #{:other-account :vat-account}
     :formatters
     {:date (comp date-formatter :date)
-     :net (comp (partial apply path-former) (juxt :other-account (comp uk-money-format :net)))
-     :vat (comp (partial apply path-former) (juxt :vat-account (comp uk-money-format :vat)))
+     :net (comp (partial apply path-former) (juxt (comp keyword-formatter :db/ident :other-account) (comp uk-money-format :net)))
+     :vat (comp (partial apply path-former) (juxt (comp keyword-formatter :db/ident :vat-account) (comp uk-money-format :vat)))
      :total (comp uk-money-format :total)
      }
     :classes
@@ -308,7 +308,7 @@
 
         menu [["Accounts" accounts-page]
               ["Invoices" invoices-page]
-              ["VAT Returns" vat-returns-page]]]
+              ["VAT" vat-returns-page]]]
     ["/"
      [
       ["" (->Redirect 307 accounts-page)]
