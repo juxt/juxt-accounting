@@ -166,6 +166,12 @@
           ))
 
       (doseq [{:keys [entity vat-account credit-account date retained-vat-account] :as vat-return} vat-returns]
+
+        (let [db (d/db conn)]
+          (assert (:db/id (to-entity-map vat-account db)) (format "VAT account doesn't exist: %s" vat-account))
+          (assert (:db/id (to-entity-map credit-account db)) (format "VAT credit account doesn't exist: %s" vat-account))
+          (assert (:db/id (to-entity-map retained-vat-account db)) (format "Retained VAT account doesn't exist: %s" retained-vat-account)))
+
         (let [get-time (fn [d] (.getTime d))]
           ;; Get invoices for last 3 month period that haven't already been paid
           (debugf "VAT return - date is %s" (.getTime (db/to-date date)))
@@ -175,6 +181,16 @@
 
           (debugf "Filtered invoices")
           ;; TODO Need to reduce over invoices, sum sub-total, sum total (for box 6)
+
+
+          (doseq [i
+                (filter
+                 (every-pred
+                  (comp not :output-tax-paid)
+                  (comp (partial > (get-time (db/to-date date))) get-time :invoice-date))
+                 (db/get-invoices (d/db conn)))]
+            (infof "Invoice: %s" i))
+
 
           (let [{:keys [invoices subtotal total output-tax]}
                 (reduce

@@ -315,6 +315,9 @@
                     :item-count [:invoice :juxt.accounting/item count]
                     :invoice-date [:invoice :juxt.accounting/invoice-date]
                     :issue-date [:invoice :juxt.accounting/issue-date]
+                    :total [:invoice :juxt.accounting/total]
+                    :subtotal [:invoice :juxt.accounting/subtotal]
+                    :output-tax [:invoice :juxt.accounting/output-tax]
                     }))
      ;; Sort
      (sort-by :invoice-date))))
