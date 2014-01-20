@@ -113,6 +113,20 @@
          #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]
          )))))
 
+(defn entity-page [dburi account-page]
+  (fn [req]
+    (let [db (d/db (d/connect dburi))
+          accounts (db/get-accounts-as-table db)
+          entity (keyword (get-in req [:route-params :entity]))]
+      (->> accounts
+           (sort-by :ident)
+           (filter #(= entity (:entity %)))
+           (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
+                      :hide-columns #{:entity :component-count}
+                      :formatters {:ident (fn [x] (account-link (:jig.bidi/routes req) account-page (:ident x)))
+                                   :balance #(moneyformat (:balance %) java.util.Locale/UK)}
+                      :classes {:balance :numeric}})))))
+
 (defn vat-ledger? [records]
   (every? (every-pred
            #(= 2 (count %))
@@ -127,14 +141,14 @@
 (defn account-link2 [routes target acct text]
   [:a {:href (path-for routes target :account acct)} text])
 
-(defn to-vat-ledger [url-for records]
+(defn to-vat-ledger [records path-former]
   (to-table
    {:column-order (explicit-column-order :date :description :txdesc :net :other-account :vat :total)
     :hide-columns #{:other-account :vat-account}
     :formatters
     {:date (comp date-formatter :date)
-     :net (comp (partial apply account-link2 url-for) (juxt :other-account (comp uk-money-format :net)))
-     :vat (comp (partial apply account-link2 url-for) (juxt :vat-account (comp uk-money-format :vat)))
+     :net (comp (partial apply path-former) (juxt :other-account (comp uk-money-format :net)))
+     :vat (comp (partial apply path-former) (juxt :vat-account (comp uk-money-format :vat)))
      :total (comp uk-money-format :total)
      }
     :classes
@@ -164,7 +178,7 @@
 (defn to-ledger-view [db target records routes]
   (cond
    (vat-ledger? records)
-   (comment (to-vat-ledger url-for (sort-by (comp :date first) records)))
+   (to-vat-ledger (sort-by (comp :date first) records) (partial account-link2 routes target))
    (single-component-records? records)
    (->> records (map first) (sort-by :date)
         (to-table {:column-order (explicit-column-order :date :description :other-account)
@@ -287,6 +301,7 @@
 
   (let [account-page (account-page dburi)
         accounts-page (accounts-page dburi account-page)
+        entity-page (entity-page dburi account-page)
         invoice-pdf-page (invoice-pdf-page dburi)
         invoices-page (invoices-page dburi invoice-pdf-page)
         vat-returns-page (vat-returns-page dburi)
@@ -306,6 +321,7 @@
       ["" (->WrapMiddleware
            [["accounts/" accounts-page]
             [["accounts/" :account] account-page]
+            [["entities/" :entity] entity-page]
             ["invoices/" invoices-page]
             ["vat-returns/" vat-returns-page]
             ]
