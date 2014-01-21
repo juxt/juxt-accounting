@@ -113,20 +113,6 @@
          #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]
          )))))
 
-(defn entity-page [dburi account-page]
-  (fn [req]
-    (let [db (d/db (d/connect dburi))
-          accounts (db/get-accounts-as-table db)
-          entity (keyword (get-in req [:route-params :entity]))]
-      (->> accounts
-           (sort-by :ident)
-           (filter #(= entity (:entity %)))
-           (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
-                      :hide-columns #{:entity :component-count}
-                      :formatters {:ident (fn [x] (account-link (:jig.bidi/routes req) account-page (:ident x)))
-                                   :balance #(moneyformat (:balance %) java.util.Locale/UK)}
-                      :classes {:balance :numeric}})))))
-
 (defn vat-ledger? [records]
   (every? (every-pred
            #(= 2 (count %))
@@ -219,6 +205,26 @@
                    (when (pos? (count entries))
                      [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])))))))))
 
+
+(defn views-page [dburi target]
+  (let [db (d/db (d/connect dburi))]
+    (fn this [req]
+      (let [routes (:jig.bidi/routes req)
+            views [{:a "A"} {:a "B"} {:a "C"}]]
+
+        (->> views
+             (to-table
+              {:formatters
+               {               }
+               :hide-columns #{}
+               :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))))
+
+(defn view-page [dburi]
+  (fn [req]
+    (ring-resp/response "View")
+    )
+)
+
 (defn invoices-page [dburi target]
   (let [db (d/db (d/connect dburi))]
     (fn this [req]
@@ -301,12 +307,16 @@
 
   (let [account-page (account-page dburi)
         accounts-page (accounts-page dburi account-page)
-        entity-page (entity-page dburi account-page)
+
+        view-page (view-page dburi)
+        views-page (views-page dburi view-page)
+
         invoice-pdf-page (invoice-pdf-page dburi)
         invoices-page (invoices-page dburi invoice-pdf-page)
         vat-returns-page (vat-returns-page dburi)
 
         menu [["Accounts" accounts-page]
+              ["Views" views-page]
               ["Invoices" invoices-page]
               ["VAT" vat-returns-page]]]
     ["/"
@@ -314,6 +324,7 @@
       ["" (->Redirect 307 accounts-page)]
 
       ["accounts" (->Redirect 307 accounts-page)]
+      ["views" (->Redirect 307 views-page)]
       ["invoices" (->Redirect 307 invoices-page)]
 
       [["invoice-pdfs/" :invoice-ref] invoice-pdf-page]
@@ -321,7 +332,8 @@
       ["" (->WrapMiddleware
            [["accounts/" accounts-page]
             [["accounts/" :account] account-page]
-            [["entities/" :entity] entity-page]
+            ["views/" views-page]
+            [["views/" :view] view-page]
             ["invoices/" invoices-page]
             ["vat-returns/" vat-returns-page]
             ]
