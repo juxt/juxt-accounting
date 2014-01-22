@@ -55,21 +55,21 @@
         (when client
           (db/create-account!
               conn
-              :ident (keyword (clojure.core/name ident) "accounts-receivable")
+              :ident (keyword (str (clojure.core/name ident) ".accounts-receivable"))
               :entity ident
               :currency (to-currency-unit "GBP")
               :name "Accounts Receivable"
               )
           (db/create-account!
               conn
-              :ident (keyword (clojure.core/name ident) "assets")
+              :ident (keyword (str (clojure.core/name ident) ".assets"))
               :entity ident
               :currency (to-currency-unit "GBP")
               :name "Work supplied"
               )
           (db/create-account!
               conn
-              :ident (keyword (clojure.core/name ident) "assets-pending-invoice")
+              :ident (keyword (str (clojure.core/name ident) ".assets-pending-invoice"))
               :entity ident
               :currency (to-currency-unit "GBP")
               :name "Billable work"
@@ -77,14 +77,14 @@
         (when supplier
           (db/create-account!
               conn
-              :ident (keyword (clojure.core/name ident) "accounts-payable")
+              :ident (keyword (str (clojure.core/name ident) ".accounts-payable"))
               :entity ident
               :currency (to-currency-unit "GBP")
               :name "Accounts Receivable"
               )
           (db/create-account!
               conn
-              :ident (keyword (clojure.core/name ident) "liabilities")
+              :ident (keyword (str (clojure.core/name ident) ".liabilities"))
               :entity ident
               :currency (to-currency-unit "GBP")
               :name "Billable work"

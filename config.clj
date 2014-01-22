@@ -45,7 +45,7 @@
                    (str
                     (System/getProperty "user.home")
                     "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/stencil-loader :accounts/statement-processor :accounts/db]
+   :jig/dependencies [:accounts/stencil-loader :accounts/statement-processor :accounts/data-loader :accounts/data-extractor]
    :jig.stencil/loader :accounts/stencil-loader
 
    :juxt.accounting/data :accounts/db

@@ -98,8 +98,7 @@
   (init [_ system] system)
   (start [_ system]
     (infof "Initializing Website: %s" (:jig/id config))
-    (let [dburi (get-in (jig.util/satisfying-dependency system config 'juxt.accounting.jig/Database)
-                        [:db :uri])
+    (let [dburi (:dburi system)
           template-loader (get-in system [(:jig/id (jig.util/satisfying-dependency system config 'jig.stencil/StencilLoader)) :jig.stencil/loader])
           ]
       (doseq [k [:bootstrap-dist :jquery-dist]]
@@ -113,5 +112,9 @@
           ;;(link-to-stencil-loader config)
 
           (add-bidi-routes config
-                           (create-bidi-routes (merge config {:dburi dburi :template-loader template-loader}))))))
+                           (create-bidi-routes
+                            (merge config
+                                   {:dburi dburi
+                                    :template-loader template-loader
+                                    :data (:data system)}))))))
   (stop [_ system] system))

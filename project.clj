@@ -9,7 +9,7 @@
 ;;
 ;; You must not remove this notice, or any other, from this software.
 
-(def jig-version "2.0.0-RC7-SNAPSHOT")
+(def jig-version "2.0.0-RC8-SNAPSHOT")
 
 (defproject juxt/accounting "0.1.5-SNAPSHOT"
   :description "JUXT Accounting"

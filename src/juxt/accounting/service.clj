@@ -19,8 +19,7 @@
     [trace :refer (deftrace)]
     [logging :refer :all]]
    [ring.util
-    [response :as ring-resp]
-    [codec :as codec]]
+    [response :as ring-resp]]
    [bidi.bidi :refer (->Redirect ->WrapMiddleware path-for)]
    [hiccup.core :refer (html h)]
    [ring.util.response :refer (file-response)]
@@ -80,38 +79,32 @@
 (defn get-dburi [context]
   (get-in (:system context) [:jig/config :jig/components (:juxt.accounting/data (:component context)) :db :uri]))
 
-(defn keyword-formatter [x]
-  {:pre [x]}
-  (if (keyword? x)
-    (format "%s/%s" (namespace x) (name x))
-    (str x)))
-
 (defn date-formatter [d]
   {:pre [(instance? java.util.Date d)]}
   (.format (java.text.SimpleDateFormat. "y-MM-dd") d))
 
-(defn account-link [routes target account]
-  [:a {:href (path-for routes target :account (keyword-formatter account))} (keyword-formatter account)])
+(defn accounts-table [req as-path db accounts]
+  (list
+   (->> accounts
+        (sort-by :ident)
+        (map #(assoc %
+                :balance (db/get-balance db (:ident %))
+                :component-count (db/count-account-components db (:ident %))))
+        (remove (comp zero? :component-count))
+        (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
+                   :hide-columns #{:entity :component-count}
+                   :formatters {:ident (fn [x]
+                                         [:a {:href (as-path req :account :account-id (name (:ident x)))} (name (:ident x))])
+                                :balance #(moneyformat (:balance %) java.util.Locale/UK)}
+                   :classes {:balance :numeric}}))
+   #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]))
 
-(defn accounts-page [dburi account-page]
+(defn accounts-page [dburi as-path]
   (fn [req]
     (infof "keys of request are %s" (keys req))
     (let [db (d/db (d/connect dburi))]
       (let [accounts (db/get-accounts-as-table db)]
-        (list
-         (->> accounts
-              (sort-by :ident)
-              (map #(assoc %
-                      :balance (db/get-balance db (:ident %))
-                      :component-count (db/count-account-components db (:ident %))))
-              (remove (comp zero? :component-count))
-              (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
-                         :hide-columns #{:entity :component-count}
-                         :formatters {:ident (fn [x] (account-link (:jig.bidi/routes req) account-page (:ident x)))
-                                      :balance #(moneyformat (:balance %) java.util.Locale/UK)}
-                         :classes {:balance :numeric}}))
-         #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]
-         )))))
+        (accounts-table req as-path db accounts)))))
 
 (defn vat-ledger? [records]
   (every? (every-pred
@@ -124,17 +117,18 @@
 (defn uk-money-format [value]
   (moneyformat value java.util.Locale/UK))
 
-(defn account-link2 [routes target acct text]
-  [:a {:href (path-for routes target :account acct)} text])
-
-(defn to-vat-ledger [records path-former]
+(defn to-vat-ledger [req records as-path]
   (to-table
    {:column-order (explicit-column-order :date :description :txdesc :net :other-account :vat :total)
     :hide-columns #{:other-account :vat-account}
     :formatters
     {:date (comp date-formatter :date)
-     :net (comp (partial apply path-former) (juxt (comp keyword-formatter :db/ident :other-account) (comp uk-money-format :net)))
-     :vat (comp (partial apply path-former) (juxt (comp keyword-formatter :db/ident :vat-account) (comp uk-money-format :vat)))
+     :net (fn [x]
+            [:a {:href (as-path req :account :account-id (-> x :other-account :db/ident name))}
+             (-> x :net uk-money-format)])
+     :vat (fn [x]
+            [:a {:href (as-path req :account :account-id (-> x :vat-account :db/ident name))}
+             (-> x :vat uk-money-format)])
      :total (comp uk-money-format :total)
      }
     :classes
@@ -161,25 +155,27 @@
          :total #(total [(get-in % [:net :value]) (get-in % [:vat :value])])
          })))))
 
-(defn to-ledger-view [db target records routes]
+(defn to-ledger-view [req db as-path records]
   (cond
    (vat-ledger? records)
-   (to-vat-ledger (sort-by (comp :date first) records) (partial account-link2 routes target))
+   (to-vat-ledger req (sort-by (comp :date first) records) as-path)
    (single-component-records? records)
    (->> records (map first) (sort-by :date)
         (to-table {:column-order (explicit-column-order :date :description :other-account)
                    :hide-columns #{:entry :type :account :id :other-account :invoice-item}
                    :formatters {:date (comp date-formatter :date)
                                 :value (fn [{:keys [value other-account]}]
-                                         (account-link2 routes target (keyword-formatter (:db/ident other-account)) (moneyformat value java.util.Locale/UK)))}
+                                         ;; link to 'other account'
+                                         (moneyformat value java.util.Locale/UK))}
                    :classes {:value "numeric"}}))
    :otherwise
    [:pre (with-out-str (clojure.pprint/pprint records))]))
 
-(defn account-page [dburi]
+(defn account-page [dburi as-path]
   (fn this [req]
+    (println "Account page requested!")
     (let [db (d/db (d/connect dburi))]
-      (let [account (keyword (get-in req [:route-params :account]))
+      (let [account (keyword (get-in req [:route-params :account-id]))
             details (to-entity-map account db)
             entity (to-entity-map (:juxt.accounting/entity details) db)]
         (list [:h2 "Account"]
@@ -187,7 +183,7 @@
                (for [[dt dd]
                      (map vector ["Id" "Currency" "Entity" "Balance"]
                           (list
-                           (keyword-formatter (:db/ident details))
+                           (name (:db/ident details))
                            (:juxt.accounting/currency details)
                            (:juxt.accounting entity)
                            (moneyformat (db/get-balance db account) java.util.Locale/UK)
@@ -201,31 +197,36 @@
                       entries (map second (group-by :entry components))]
                   (list
                    [:h3 title]
-                   (to-ledger-view db this entries (:jig.bidi/routes req))
+                   (to-ledger-view req db as-path entries)  ;; TODO
                    (when (pos? (count entries))
                      [:p "Total: " (moneyformat (total (map :value components)) java.util.Locale/UK)])))))))))
 
 
-(defn views-page [dburi target]
-  (let [db (d/db (d/connect dburi))]
-    (fn this [req]
-      (let [routes (:jig.bidi/routes req)
-            views [{:a "A"} {:a "B"} {:a "C"}]]
+(defn views-page [{:keys [views]} as-path]
+  (fn this [req]
+    (let [routes (:jig.bidi/routes req)]
+      (->> views
+           (map (fn [[k v]](assoc v :view-id (name k))))
+           (to-table
+            {:formatters
+             {:label (fn [x] [:a {:href (as-path req :view :view-id (:view-id x))} (:label x)])}
+             :hide-columns #{:accounts :view-id}
+             :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)})))))
 
-        (->> views
-             (to-table
-              {:formatters
-               {               }
-               :hide-columns #{}
-               :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))))
+(defn view-pred [pat-list]
+  (fn [account]
+    (infof "Account to filter is %s" account)
+    (some #(re-matches (re-pattern %) (-> account :ident name)) pat-list)))
 
-(defn view-page [dburi]
+(defn view-page [{:keys [views]} dburi as-path]
   (fn [req]
-    (ring-resp/response "View")
-    )
-)
+    (let [db (d/db (d/connect dburi))]
+      (let [view (get views (-> req :route-params :view-id keyword))
+            accounts (filter (view-pred (:accounts view)) (db/get-accounts-as-table db))]
+        (accounts-table req as-path db accounts)))
+    ))
 
-(defn invoices-page [dburi target]
+(defn invoices-page [dburi as-path]
   (let [db (d/db (d/connect dburi))]
     (fn this [req]
       (let [routes (:jig.bidi/routes req)
@@ -234,7 +235,7 @@
              (to-table
               {:formatters
                {:invoice-ref
-                (fn [x] [:a {:href (path-for routes target :invoice-ref (:invoice-ref x))} (:invoice-ref x)])
+                (fn [x] [:a {:href (as-path req :invoice :invoice-ref (:invoice-ref x))} (:invoice-ref x)])
                 :invoice-date (comp date-formatter :invoice-date)
                 :issue-date (comp date-formatter :issue-date)
                 :output-tax-paid #(some-> % :output-tax-paid :juxt.accounting/date date-formatter)
@@ -295,52 +296,59 @@
      (ring-resp/content-type "text/plain")
      (ring-resp/charset "utf-8"))))
 
+(defn wrap-promise [p]
+  (letfn [(ensure-realized [] (assert (realized? p) "Cannot lookup until deref is realized"))]
+    (reify
+      clojure.lang.ILookup
+      (valAt [_ k]
+        (ensure)
+        (apply get @p k))
+      (valAt [_ k not-found]
+        (ensure)
+        (apply get @p k not-found)))))
+
+(defn create-handlers [data dburi]
+  (let [p (promise)
+        as-path (fn [req k & args]
+                  (assert (realized? p))
+                  (apply path-for (:jig.bidi/routes req) (k @p) args))]
+    @(deliver p {:accounts (accounts-page dburi as-path)
+                 :account (account-page dburi as-path)
+                 :views (views-page data as-path)
+                 :view (view-page data dburi as-path)
+                 :invoices (invoices-page dburi as-path)
+                 :invoice (invoice-pdf-page dburi)
+                 :vat-returns (vat-returns-page dburi)})))
+
 (defn create-bidi-routes
   [{bootstrap-dist-dir :bootstrap-dist
     jquery-dist-dir :jquery-dist
     dburi :dburi
-    template-loader :template-loader}]
-
-  {:pre [(string? bootstrap-dist-dir)
-         (string? jquery-dist-dir)
-         (string? dburi)]}
-
-  (let [account-page (account-page dburi)
-        accounts-page (accounts-page dburi account-page)
-
-        view-page (view-page dburi)
-        views-page (views-page dburi view-page)
-
-        invoice-pdf-page (invoice-pdf-page dburi)
-        invoices-page (invoices-page dburi invoice-pdf-page)
-        vat-returns-page (vat-returns-page dburi)
-
-        menu [["Accounts" accounts-page]
-              ["Views" views-page]
-              ["Invoices" invoices-page]
-              ["VAT" vat-returns-page]]]
+    template-loader :template-loader
+    data :data}]
+  (let [handlers (create-handlers data dburi)]
     ["/"
      [
-      ["" (->Redirect 307 accounts-page)]
+      ["" (->Redirect 307 (:accounts handlers))]
+      ["accounts" (->Redirect 307 (:accounts handlers))]
+      ["views" (->Redirect 307 (:views handlers))]
+      ["invoices" (->Redirect 307 (:invoices handlers))]
 
-      ["accounts" (->Redirect 307 accounts-page)]
-      ["views" (->Redirect 307 views-page)]
-      ["invoices" (->Redirect 307 invoices-page)]
-
-      [["invoice-pdfs/" :invoice-ref] invoice-pdf-page]
-
+      [["invoice-pdfs/" :invoice-ref] (:invoice handlers)]
       ["" (->WrapMiddleware
-           [["accounts/" accounts-page]
-            [["accounts/" :account] account-page]
-            ["views/" views-page]
-            [["views/" :view] view-page]
-            ["invoices/" invoices-page]
-            ["vat-returns/" vat-returns-page]
+           [
+            ["accounts/" (:accounts handlers)]
+            [["accounts/" [#".*" :account-id]] (:account handlers)]
+            ["views/" (:views handlers)]
+            [["views/" :view-id] (:view handlers)]
+            ["invoices/" (:invoices handlers)]
+            ["vat-returns/" (:vat-returns handlers)]
             ]
-           (partial boilerplate template-loader menu))]
-
+           (partial boilerplate template-loader [["Accounts" (:accounts handlers)]
+                                                 ["Views" (:views handlers)]
+                                                 ["Invoices" (:invoices handlers)]
+                                                 ["VAT" (:vat-returns handlers)]
+                                                 ]))]
       ["style.css" css-page]
-
-      ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]
       ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
-      ]]))
+      ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]]]))
