@@ -39,16 +39,25 @@
         (d/delete-database dburi))
       (infof "Initializing database: %s" dburi)
       (db/init dburi)
-      system))
+      (assoc system :dburi dburi)))
   (start [_ system]
     (infof "Starting Database component")
-    (process-accounts-file (-> config :accounts-file) (-> config :db :uri))
     system)
   (stop [_ system]
     (when-not (-> config :db :persistent)
       (d/delete-database (-> config :db :uri)))
     (d/shutdown false)
     system))
+
+(deftype DatabaseLoader [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (if-let [dburi (:dburi system)]
+      (process-accounts-file (-> config :accounts-file) dburi)
+      (throw (ex-info "No dburi" {})))
+    system)
+  (stop [_ system] system))
 
 ;; An optional module that can process statements. Should depend on the
 ;; instance of the database component above.
