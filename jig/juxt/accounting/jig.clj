@@ -20,6 +20,8 @@
    [jig.bidi :refer (add-bidi-routes)]
    [clojure.tools.logging :refer :all]
    [clojure.java.io :as io]
+   [clojure.edn :as edn]
+   [clojurewerkz.money.currencies :as mc :refer (to-currency-unit)]
    [juxt.accounting
     [database :as db]
     [driver :refer (process-accounts-file)]
@@ -31,8 +33,6 @@
 (deftype Database [config]
   Lifecycle
   (init [_ system]
-    (infof "Initialising Database component, config is %s"
-           (select-keys config [:db :accounts-file]))
     (let [dburi (-> config :db :uri)]
       (when-not (-> config :db :persistent)
         (infof "Deleting database: %s" dburi)
@@ -49,13 +49,31 @@
     (d/shutdown false)
     system))
 
-(deftype DatabaseLoader [config]
+(deftype DataExtractor [config]
   Lifecycle
   (init [_ system] system)
   (start [_ system]
-    (if-let [dburi (:dburi system)]
-      (process-accounts-file (-> config :accounts-file) dburi)
-      (throw (ex-info "No dburi" {})))
+    (assert (:accounts-file config) "No accounts file")
+    (let [accountsfile (io/file (:accounts-file config))]
+      (assoc system
+        :data (edn/read-string
+                   {:readers {'juxt.accounting/currency
+                              (fn [x] (to-currency-unit (str x)))}}
+                   (slurp (io/file (:accounts-file config))))
+        :basedir (.getParentFile accountsfile))))
+  (stop [_ system] system))
+
+(deftype DataLoader [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (let [dburi (:dburi system)
+          data (:data system)
+          basedir (:basedir system)]
+      (if (and dburi data)
+        (process-accounts-file basedir data dburi)
+        (cond (nil? dburi) (ex-info "No dburi" {})
+              (nil? data) (ex-info "No data" {}))))
     system)
   (stop [_ system] system))
 

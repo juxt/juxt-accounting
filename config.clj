@@ -13,20 +13,28 @@
    :db {:uri "datomic:mem://juxt/accounts"}
    }
 
-  :accounts/db-loader
-  {:jig/component juxt.accounting.jig/DatabaseLoader
+  :accounts/data-extractor
+  {:jig/component juxt.accounting.jig/DataExtractor
    :jig/project #=(eval
                    (str
                     (System/getProperty "user.home")
                     "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/db]
    ;; Merge in :accounts-file, which needs processing
+   }
+
+  :accounts/data-loader
+  {:jig/component juxt.accounting.jig/DataLoader
+   :jig/project #=(eval
+                   (str
+                    (System/getProperty "user.home")
+                    "/src/accounting/project.clj"))
+   :jig/dependencies [:accounts/db :accounts/data-extractor]
    }
 
   :accounts/statement-processor
   {:jig/component juxt.accounting.jig/StatementProcessor
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/db-loader]
+   :jig/dependencies [:accounts/data-loader]
    :database :accounts/db
    ;; Merge in :statement-directory, where downloaded bank statements can be found (in OFX format)
    }
