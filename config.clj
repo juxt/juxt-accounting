@@ -22,13 +22,22 @@
    ;; Merge in :accounts-file, which needs processing
    }
 
+  :accounts/data-extractor2
+  {:jig/component juxt.accounting.jig/DataExtractor
+   :jig/project #=(eval
+                   (str
+                    (System/getProperty "user.home")
+                    "/src/accounting/project.clj"))
+   ;; Merge in :accounts-file, which needs processing
+   }
+
   :accounts/data-loader
   {:jig/component juxt.accounting.jig/DataLoader
    :jig/project #=(eval
                    (str
                     (System/getProperty "user.home")
                     "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/db :accounts/data-extractor]
+   :jig/dependencies [:accounts/db :accounts/data-extractor :accounts/data-extractor2]
    }
 
   :accounts/statement-processor

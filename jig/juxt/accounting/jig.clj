@@ -75,9 +75,6 @@
                    ;; This update is only going to be necessar
                    (update-in [:entities] #(into {} %))
                    (update-in [:views] #(into {} %)))]
-
-      ;; Merge the data in the system
-      (clojure.pprint/pprint data)
       (process-accounts-file data dburi)
       (assoc system :data data)))
   (stop [_ system] system))
