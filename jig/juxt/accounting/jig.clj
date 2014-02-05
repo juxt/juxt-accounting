@@ -55,12 +55,14 @@
   (start [_ system]
     (assert (:accounts-file config) "No accounts file")
     (let [accountsfile (io/file (:accounts-file config))]
-      (assoc system
-        :data (edn/read-string
-                   {:readers {'juxt.accounting/currency
-                              (fn [x] (to-currency-unit (str x)))}}
-                   (slurp (io/file (:accounts-file config))))
-        :basedir (.getParentFile accountsfile))))
+      (update-in system
+                [:inputs]
+                conj
+                (edn/read-string
+                 {:readers {'juxt.accounting/currency
+                            (fn [x] (to-currency-unit (str x)))}}
+                 (slurp (io/file (:accounts-file config))))
+                )))
   (stop [_ system] system))
 
 (deftype DataLoader [config]
@@ -68,13 +70,16 @@
   (init [_ system] system)
   (start [_ system]
     (let [dburi (:dburi system)
-          data (:data system)
-          basedir (:basedir system)]
-      (if (and dburi data)
-        (process-accounts-file basedir data dburi)
-        (cond (nil? dburi) (ex-info "No dburi" {})
-              (nil? data) (ex-info "No data" {}))))
-    system)
+          _ (when-not dburi (ex-info "No dburi" {}))
+          data (-> (apply merge-with concat (:inputs system))
+                   ;; This update is only going to be necessar
+                   (update-in [:entities] #(into {} %))
+                   (update-in [:views] #(into {} %)))]
+
+      ;; Merge the data in the system
+      (clojure.pprint/pprint data)
+      (process-accounts-file data dburi)
+      (assoc system :data data)))
   (stop [_ system] system))
 
 ;; An optional module that can process statements. Should depend on the

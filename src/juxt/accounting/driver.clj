@@ -39,7 +39,7 @@
     [invoicing :as invoicing]
     [money :refer (as-money)]]))
 
-(defn process-accounts-file [basedir {:keys [entities accounts transactions invoices vat-returns]} dburi]
+(defn process-accounts-file [{:keys [entities accounts transactions invoices vat-returns]} dburi]
   (let [conn (d/connect dburi)]
     (doseq [[ident {:keys [name code vat-no registered-address invoice-address invoice-addressee client supplier]}] entities]
       (do
@@ -150,9 +150,6 @@
                        :invoice-ref-prefix (format "%s-%s-" code (time/year (from-date invoice-date)))
                        :initial-invoice-suffix "01"
                        :purchase-order-reference purchase-order-reference)
-            ;; We need to reparent the value of output-dir relative to the file it is specified in.
-            invoice-args (update-in invoice-args [:output-dir]
-                                    #(.getAbsolutePath (file basedir %)))
             invoice-data (templater (d/db conn) invoice invoice-args)]
         (debugf "Invoice data: %s" invoice-data)
         (invoicing/generate-pdf-for-invoice conn invoice-data)
