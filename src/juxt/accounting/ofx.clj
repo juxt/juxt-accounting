@@ -90,12 +90,18 @@
                  :fitid (xml1-> tx :fitid text)
                  :memo (xml1-> tx :memo text)}))]))))
 
+
+
 (defn add-transactions [dir dburi account-mappings]
   {:pre [dburi account-mappings]}
   (let [dir (io/file dir)
         conn (as-conn dburi)
         db (d/db conn)]
-    (doseq [[acct transactions] (apply merge-with union (map extract-transactions (.listFiles dir)))]
+    (doseq [[acct transactions]
+            (->> dir (.listFiles)
+                 (filter (comp not (partial re-matches #".*\.md") (memfn getName)))
+                 (map extract-transactions)
+                 (apply merge-with union))]
       (if-let [acct (:ident (db/find-account db :account-no (:accno acct) :sort-code (:sort-code acct)))]
         (doseq [tx transactions]
           (debugf "tx is %s" tx)
