@@ -14,7 +14,7 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns juxt.accounting.jig
+(ns juxt.accounting.components
   (:require
    jig
    [jig.bidi :refer (add-bidi-routes)]
@@ -75,6 +75,7 @@
                    ;; This update is only going to be necessary while entities is still a map
                    (update-in [:entities] #(into {} %))
                    (update-in [:views] #(into {} %)))]
+      ;; TODO Got to move all this logic out of this driver
       (process-accounts-file data dburi)
       (assoc system :data data)))
   (stop [_ system] system))
