@@ -134,6 +134,16 @@
 
      ]))
 
+(defn entities-page [dburi as-path]
+  (fn [req]
+    [:p "Entities page"]
+    (let [db (d/db (d/connect dburi))]
+      (list
+       (to-table {:hide-columns #{}
+                  :column-order (explicit-column-order :ident :name)}
+                 (->> (db/get-legal-entities-as-table db)
+                      (sort-by :ident)))))))
+
 (defn accounts-page [dburi as-path]
   (fn [req]
     (infof "keys of request are %s" (keys req))
@@ -351,6 +361,7 @@
                   (assert (realized? p))
                   (apply path-for (:jig.bidi/routes req) (k @p) args))]
     @(deliver p {:index (index-page p)
+                 :entities (entities-page dburi as-path)
                  :accounts (accounts-page dburi as-path)
                  :account (account-page dburi as-path)
                  :views (views-page data as-path)
@@ -377,6 +388,7 @@
       ["" (->WrapMiddleware
            [
             ["index" (:index handlers)]
+            ["entities/" (:entities handlers)]
             ["accounts/" (:accounts handlers)]
             [["accounts/" [#".*" :account-id]] (:account handlers)]
             ["views/" (:views handlers)]
@@ -384,7 +396,8 @@
             ["invoices/" (:invoices handlers)]
             ["vat-returns/" (:vat-returns handlers)]
             ]
-           (partial boilerplate template-loader [["Accounts" (:accounts handlers)]
+           (partial boilerplate template-loader [["Entities" (:entities handlers)]
+                                                 ["Accounts" (:accounts handlers)]
                                                  ["Views" (:views handlers)]
                                                  ["Invoices" (:invoices handlers)]
                                                  ["VAT" (:vat-returns handlers)]

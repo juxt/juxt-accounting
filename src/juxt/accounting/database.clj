@@ -104,7 +104,8 @@
          (or (nil? name) (string? name))
          (not (nil? ident))]}
   (let [legal-entity (d/tempid :db.part/user)]
-    (->> [(when ident [:db/add legal-entity :db/ident ident])
+    (->> [[:db/add legal-entity :juxt/type :entity]
+          (when ident [:db/add legal-entity :db/ident ident])
           (when name [:db/add legal-entity :juxt.accounting/name name])
           (when code [:db/add legal-entity :juxt.accounting/code code])
           (when vat-no [:db/add legal-entity :juxt.accounting/vat-number vat-no])
@@ -129,6 +130,25 @@
           (when sort-code [:db/add account :juxt.accounting/sort-code sort-code])]
          (remove nil?) vec
          (transact-insert conn account))))
+
+(defn get-legal-entities
+  "Get all the entties"
+  [db]
+  (let [db (as-db db)]
+    (for [[e]
+          (q '[:find ?e :in $
+               :where
+               [?e :juxt/type :entity]]
+             db)]
+      (into {} (to-entity-map e db)))))
+
+(defn get-legal-entities-as-table
+  "Get all the entties"
+  [db]
+  (map #(spider %
+                {:ident :db/ident
+                 :name :juxt.accounting/name})
+       (get-legal-entities db)))
 
 (defn get-accounts
   "Get all the accounts"
