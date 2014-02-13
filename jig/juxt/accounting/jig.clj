@@ -72,7 +72,7 @@
     (let [dburi (:dburi system)
           _ (when-not dburi (ex-info "No dburi" {}))
           data (-> (apply merge-with concat (:inputs system))
-                   ;; This update is only going to be necessar
+                   ;; This update is only going to be necessary while entities is still a map
                    (update-in [:entities] #(into {} %))
                    (update-in [:views] #(into {} %)))]
       (process-accounts-file data dburi)
