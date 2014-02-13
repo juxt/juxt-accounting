@@ -3,6 +3,7 @@
 ;; This file is part of JUXT Accounting.
 ;;
 ;; JUXT Accounting is free software: you can redistribute it and/or modify it under the
+;; terms of the GNU Affero General Public License as published by the Free
 ;; Software Foundation, either version 3 of the License, or (at your option) any
 ;; later version.
 ;;
@@ -44,7 +45,15 @@
        [:h1 :h2 :h3 {:color (rgb 0 0 154)}]
        [:td {:font-family "monospace" :font-size (pt 12)}]
        [:td.numeric {:text-align :right}]
-       [:th.numeric {:text-align :right}])
+       [:th.numeric {:text-align :right}]
+       [:div.container-narrow {:margin-left (pt 10) :font-size (pt 12)}]
+       [:dt {:float :left}]
+       [:dd {:margin-left (em 12 )}]
+       [:p {:width (em 60)}]
+       [:div.index {:padding-left (percent 20)
+                    :padding-top (em 2)
+                    }]
+       )
       ring-resp/response
       (ring-resp/content-type "text/css")))
 
@@ -99,12 +108,40 @@
                    :classes {:balance :numeric}}))
    #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]))
 
+(defn index-page [handlers]
+  (fn [{routes :jig.bidi/routes :as req}]
+    [:div.index
+     [:h2 "Welcome to JUXT Accounting"]
+
+     [:p "JUXT Accounting is an accounts program written by, and for,
+     JUXT."]
+
+     [:p "Like most accounting programs it is based on the centuries-old
+     invention of " [:i "double-entry bookkeeping"] ". Every transaction
+     in the system is recorded as both a credit in one account and a
+     debit in another. There are no exceptions to this rule, and it is
+     enforced rigourously by the database API."]
+
+     [:p "Unlike most accounting programs, this program does not store
+     state, nor provide a means of data entry. Transactions are recorded
+     in files, using a simple plain-text format called " [:a
+     {:href "https://github.com/edn-format/edn"} "EDN"] ". These files are editable using a standard
+     text editor."]
+
+     [:h3 "Accounts"]
+
+     [:p "Click on the " [:a {:href (path-for routes (:accounts @handlers))} "Accounts"] " menu-item to view all the accounts. There are lots of accounts, too many really. That's where views come in."]
+
+     ]))
+
 (defn accounts-page [dburi as-path]
   (fn [req]
     (infof "keys of request are %s" (keys req))
-    (let [db (d/db (d/connect dburi))]
-      (let [accounts (db/get-accounts-as-table db)]
-        (accounts-table req as-path db accounts)))))
+    [:div
+     [:p "Here is a list of ALL the accounts in the system. Click on any account to view the transactions."]
+     (let [db (d/db (d/connect dburi))]
+       (let [accounts (db/get-accounts-as-table db)]
+         (accounts-table req as-path db accounts)))]))
 
 (defn vat-ledger? [records]
   (every? (every-pred
@@ -278,6 +315,7 @@
         (->
          (stencil/render (template-loader "templates/page.html")
                   {:title "JUXT Accounting"
+                   :title-link "/"
                    :content content
                    :app-name "JUXT Accounting"
                    :menu (for [[label handler] menu]
@@ -312,7 +350,8 @@
         as-path (fn [req k & args]
                   (assert (realized? p))
                   (apply path-for (:jig.bidi/routes req) (k @p) args))]
-    @(deliver p {:accounts (accounts-page dburi as-path)
+    @(deliver p {:index (index-page p)
+                 :accounts (accounts-page dburi as-path)
                  :account (account-page dburi as-path)
                  :views (views-page data as-path)
                  :view (view-page data dburi as-path)
@@ -329,7 +368,7 @@
   (let [handlers (create-handlers data dburi)]
     ["/"
      [
-      ["" (->Redirect 307 (:accounts handlers))]
+      ["" (->Redirect 307 (:index handlers))]
       ["accounts" (->Redirect 307 (:accounts handlers))]
       ["views" (->Redirect 307 (:views handlers))]
       ["invoices" (->Redirect 307 (:invoices handlers))]
@@ -337,6 +376,7 @@
       [["invoice-pdfs/" :invoice-ref] (:invoice handlers)]
       ["" (->WrapMiddleware
            [
+            ["index" (:index handlers)]
             ["accounts/" (:accounts handlers)]
             [["accounts/" [#".*" :account-id]] (:account handlers)]
             ["views/" (:views handlers)]

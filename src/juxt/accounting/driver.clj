@@ -34,10 +34,10 @@
    [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]
    [clojurewerkz.money.amounts :as ma]
    [juxt.datomic.extras :refer (to-entity-map)]
-   [juxt.accounting
-    [database :as db]
-    [invoicing :as invoicing]
-    [money :refer (as-money)]]))
+   [juxt.accounting.database :as db]
+   [juxt.accounting.invoicing :as invoicing]
+   [juxt.accounting.money :refer (as-money)]
+   [juxt.accounting.loading :refer (load-transaction)]))
 
 (defn process-accounts-file [{:keys [entities accounts transactions invoices vat-returns]} dburi]
   (let [conn (d/connect dburi)]
@@ -101,25 +101,25 @@
           :sort-code sort-code
           ))
 
-    (doseq [{:keys [credit-account debit-account items]} transactions]
-
+    (doseq [{:keys [credit-account debit-account items loader] :as tx} transactions]
+      ;; TODO: Improve transaction processing
       (let [db (d/db conn)]
         @(d/transact
-            conn
-            (apply concat
-                   (for [{:keys [dates description unit-amount vat-rate]} items]
-                     (apply concat
-                            (for [date dates]
-                              (db/assemble-transaction
-                                  (d/db conn)
-                                  date
-                                  (remove nil?
-                                          [{:debit-account debit-account
-                                            :credit-account credit-account
-                                            :description description
-                                            :amount unit-amount
-                                            }])
-                                  "transaction loaded from file"))))))))
+          conn
+          (apply concat
+                 (for [{:keys [dates description unit-amount vat-rate]} items]
+                   (apply concat
+                          (for [date dates]
+                            (db/assemble-transaction
+                             (d/db conn)
+                             date
+                             (remove nil?
+                                     [{:debit-account debit-account
+                                       :credit-account credit-account
+                                       :description description
+                                       :amount unit-amount
+                                       }])
+                             "transaction loaded from file"))))))))
 
     (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
       (debugf "Preparing invoice")

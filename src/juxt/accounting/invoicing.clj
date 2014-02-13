@@ -60,6 +60,9 @@
   ;; Ensure output-tax-account is real
   (assert (:db/id (to-entity-map output-tax-account db)) (str "No such account: " output-tax-account))
 
+  (assert (pos? (count components)) (format "No items for invoice %s issued on date %s" invoice-ref-prefix issue-date))
+
+
   (vec
    (remove
     nil?
