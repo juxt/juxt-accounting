@@ -10,8 +10,8 @@
    :db {:uri "datomic:mem://juxt/accounts"}
    }
 
-  :accounts/data-loader
-  {:jig/component juxt.accounting.components/DataLoader
+  #_:accounts/data-loader
+  #_{:jig/component juxt.accounting.components/DataLoader
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
    ;; These dependencies can concatenated with DataExtractor components
    :jig/dependencies [:accounts/db]
@@ -20,7 +20,7 @@
   :accounts/service
   {:jig/component juxt.accounting.components/Website
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/stencil-loader :accounts/statement-processor :accounts/data-loader]
+   :jig/dependencies [:accounts/stencil-loader #_:accounts/statement-processor #_:accounts/data-loader]
    :jig.stencil/loader :accounts/stencil-loader
 
    :juxt.accounting/data :accounts/db
@@ -45,7 +45,7 @@
 
   #_:firefox-reloader
   #_{:jig/component jig.web.firefox-reload/Component
-   :jig/dependencies [:accounts/server :console/server :accounts/db :accounts/statement-processor]
+   :jig/dependencies [:accounts/server :console/server :accounts/db #_:accounts/statement-processor]
    :jig.web.firefox-reload/host "localhost"
    :jig.web.firefox-reload/port 32000}}
 
