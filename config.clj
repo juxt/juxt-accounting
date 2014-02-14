@@ -10,6 +10,13 @@
    :db {:uri "datomic:mem://juxt/accounts"}
    }
 
+  :accounts/entities-loader
+  {:jig/component juxt.accounting.components/EntitiesLoader
+   :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
+   :jig/dependencies [:accounts/db]
+   ;; Contribute :entities-file
+   }
+
   #_:accounts/data-loader
   #_{:jig/component juxt.accounting.components/DataLoader
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))

@@ -25,6 +25,7 @@
    [juxt.accounting
     [database :as db]
     [driver :refer (process-accounts-file)]
+    [entities :refer (process-entities-file)]
     [service :refer (create-bidi-routes)]
     [ofx :as ofx]]
    [datomic.api :as d])
@@ -63,6 +64,21 @@
                             (fn [x] (to-currency-unit (str x)))}}
                  (slurp (io/file (:accounts-file config))))
                 )))
+  (stop [_ system] system))
+
+(deftype EntitiesLoader [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (let [dburi (:dburi system)
+          _ (when-not dburi (ex-info "No dburi" {}))]
+      (assert (:entities-file config) "No entities file")
+      (process-entities-file
+       (edn/read-string
+        {:readers {'juxt.accounting/currency
+                   (fn [x] (to-currency-unit (str x)))}}
+        (slurp (io/file (:entities-file config)))) dburi)
+      system))
   (stop [_ system] system))
 
 (deftype DataLoader [config]
