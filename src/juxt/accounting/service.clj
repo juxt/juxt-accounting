@@ -99,7 +99,7 @@
         (map #(assoc %
                 :balance (db/get-balance db (:ident %))
                 :component-count (db/count-account-components db (:ident %))))
-        (remove (comp zero? :component-count))
+        #_(remove (comp zero? :component-count))
         (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
                    :hide-columns #{:entity :component-count}
                    :formatters {:ident (fn [x]
