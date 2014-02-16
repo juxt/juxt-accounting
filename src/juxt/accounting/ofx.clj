@@ -94,9 +94,15 @@
 
 (defn add-transactions [dir dburi account-mappings]
   {:pre [dburi account-mappings]}
+
   (let [dir (io/file dir)
         conn (as-conn dburi)
         db (d/db conn)]
+
+    #_(println "OFX: current accounts in scope")
+
+    #_(clojure.pprint/pprint (juxt.accounting.database/get-accounts db))
+
     (doseq [[acct transactions]
             (->> dir (.listFiles)
                  (filter (comp not (partial re-matches #".*\.md") (memfn getName)))

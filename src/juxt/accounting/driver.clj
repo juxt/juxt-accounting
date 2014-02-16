@@ -20,6 +20,10 @@
 ;; concentrating on getting things working rather than code style. I'll
 ;; re-factor it sometime, I promise, really I will....
 
+;; <2014-02-15> This is still in use but marked as
+;; deprecated. Functionality is finally being moved into separate
+;; modules
+
 (ns juxt.accounting.driver
   (:require
    [clojurewerkz.money.amounts :as ma :refer (amount-of)]
@@ -37,7 +41,7 @@
    [juxt.accounting.database :as db]
    [juxt.accounting.invoicing :as invoicing]
    [juxt.accounting.money :refer (as-money)]
-   [juxt.accounting.loading :refer (load-transaction)]))
+   #_[juxt.accounting.loading :refer (load-transaction)]))
 
 (defn process-accounts-file [{:keys [entities accounts transactions invoices vat-returns]} dburi]
   (let [conn (d/connect dburi)]

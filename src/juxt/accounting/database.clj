@@ -163,6 +163,8 @@
       (-> (into {} (to-entity-map a db))
           (assoc :entity (into {} (to-entity-map e db)))))))
 
+#_(count (get-accounts-as-table (d/db (d/connect (-> user/system :dburi)))))
+
 (defn get-accounts-as-table [db]
   (map #(spider
          %
@@ -219,10 +221,18 @@
   ;; TODO, or if they are in different currencies, record the fxrate as
   ;; an fxrate attribute in the double-entry entity.
   (doseq [{:keys [debit-account credit-account amount]} components]
-    ;; TODO Check if either (:juxt.accounting/currency (to-entity-map *-account db)) is nil
-    (when-not (= (:juxt.accounting/currency (to-entity-map debit-account db))
-                 (:juxt.accounting/currency (to-entity-map credit-account db)))
-      (throw (ex-info "Accounts must be denonminated in the same currency"
+    (cond
+     (nil? (:db/id (to-entity-map debit-account db)))
+     (throw (ex-info (format "Debit account does not exist: %s" debit-account) {}))
+     (nil? (:db/id (to-entity-map credit-account db)))
+     (throw (ex-info (format "Credit account does not exist: %s" debit-account) {}))
+     (nil? (:juxt.accounting/currency (to-entity-map debit-account db)))
+     (throw (ex-info (format "Debit account does not have a currency: %s" debit-account) {}))
+     (nil? (:juxt.accounting/currency (to-entity-map credit-account db)))
+     (throw (ex-info (format "Credit account does not have a currency: %s" credit-account) {}))
+     (not= (:juxt.accounting/currency (to-entity-map debit-account db))
+           (:juxt.accounting/currency (to-entity-map credit-account db)))
+     (throw (ex-info "Accounts must be denonminated in the same currency"
                       {:debit-account-currency (:juxt.accounting/currency (to-entity-map debit-account db))
                        :credit-account-currency (:juxt.accounting/currency (to-entity-map credit-account db))}))))
 

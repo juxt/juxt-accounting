@@ -20,15 +20,16 @@
 ;; concentrating on getting things working rather than code style. I'll
 ;; re-factor it sometime, I promise, really I will....
 
-(ns juxt.accounting.entities
+(ns juxt.accounting.static
   (:require
    [datomic.api :as d]
    [juxt.accounting.database :as db]
    [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]))
 
-(defn process-entities-file [{:keys [entities accounts]} dburi]
+(defn process-static-file [{:keys [entities accounts]} dburi]
   (let [conn (d/connect dburi)]
-    (doseq [[ident {:keys [name code vat-no registered-address invoice-address invoice-addressee client supplier]}] entities]
+    (doseq [[ident {:keys [name code vat-no registered-address
+                           invoice-address invoice-addressee client supplier]}] entities]
       (do
         (db/create-legal-entity!
             conn
