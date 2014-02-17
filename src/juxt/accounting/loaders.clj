@@ -26,24 +26,37 @@
   (:import (jig Lifecycle))
   )
 
-(defn add-consulting-rate-transations [dburi transactions]
+(defn add-consulting-rate-transations [dburi txfile transactions]
   (let [conn (d/connect dburi)
         db (d/db conn)]
-    (doseq [{:keys [credit-account debit-account codes] :as tx} transactions]
-      @(d/transact conn (vec
-                         (apply concat
-                                (for [{:keys [credit-account debit-account codes items]} transactions]
-                                  (apply concat
-                                         (for [{:keys [date code]} items]
-                                           (db/assemble-transaction
-                                            db
-                                            date
-                                            [{:debit-account debit-account
-                                              :credit-account credit-account
-                                              :description (get-in codes [code :description])
-                                              :amount (get-in codes [code :rate])}]
-                                            ;; TODO: Add expenses
-                                            "transaction loaded from file"))))))))))
+    (doseq [{:keys [credit-account debit-account codes items]} transactions]
+      (doseq [{:keys [date code expenses]} items]
+        @(d/transact
+          conn
+          (db/assemble-transaction
+           db
+           date
+           (concat
+            ;; Work
+            [{:debit-account debit-account
+              :credit-account credit-account
+              :description (get-in codes [code :description])
+              :amount (get-in codes [code :rate])}])
+           (format "transaction loaded from %s" txfile)))
+        (doseq [{:keys [description cost]} expenses]
+          @(d/transact
+            conn
+            (db/assemble-transaction
+             db
+             date
+             (concat
+              ;; Expenses
+              [{:debit-account debit-account
+                :credit-account credit-account
+                :description description
+                :amount cost}]
+              )
+             (format "expense loaded from %s" txfile))))))))
 
 (deftype ConsultingRateLoader [config]
   Lifecycle
@@ -61,6 +74,7 @@
 
       (add-consulting-rate-transations
        (:dburi system)
+       txfile
        (:transactions txfile-content))
 
       system))
