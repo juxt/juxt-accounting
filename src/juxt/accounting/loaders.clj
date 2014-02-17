@@ -19,10 +19,15 @@
    jig
    [datomic.api :as d]
    [clojure.java.io :as io]
+   [juxt.datomic.extras :refer (to-entity-map)]
    [clojure.edn :as edn]
+   [clj-time.core :as time]
+   [clj-time.coerce :refer (from-date)]
    [clojure.pprint :refer (pprint)]
+   [clojure.tools.logging :refer :all]
    [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]
-   [juxt.accounting.database :as db])
+   [juxt.accounting.database :as db]
+   [juxt.accounting.invoicing :as invoicing])
   (:import (jig Lifecycle))
   )
 
@@ -58,6 +63,42 @@
               )
              (format "expense loaded from %s" txfile))))))))
 
+(defn issue-invoices [dburi invoices]
+  (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
+    (debugf "Preparing invoice")
+    (let [conn (d/connect dburi)
+          db (d/db conn)
+          company (d/entity db issuer)
+          {accno :juxt.accounting/account-number sort-code :juxt.accounting/sort-code} (to-entity-map receiving-account db)
+          templater (invoicing/create-invoice-data-template
+                     ;; TODO: All these fields are part of the issuer
+                     {:title "Director"
+                      :signatory signatory
+                      :company-name (:juxt.accounting/name company)
+                      :company-address (edn/read-string (:juxt.accounting/registered-address company))
+                      :vat-no (:juxt.accounting/vat-number company)
+                      :vat-rate output-tax-rate
+                      :bank-account-no accno
+                      :bank-sort-code sort-code
+                      })
+          code (:juxt.accounting/code (d/entity db entity))
+          invoice
+          (invoicing/issue-invoice
+           conn
+           :draw-from draw-from
+           :debit-to debit-to
+           :output-tax-account output-tax-account
+           :output-tax-rate output-tax-rate
+           :invoice-date invoice-date
+           :issue-date issue-date
+           :invoice-ref-prefix (format "%s-%s-" code (time/year (from-date invoice-date)))
+           :initial-invoice-suffix "01"
+           :purchase-order-reference purchase-order-reference)
+          invoice-data (templater (d/db conn) invoice invoice-args)]
+      (debugf "Invoice data: %s" invoice-data)
+      (invoicing/generate-pdf-for-invoice conn invoice-data)
+      )))
+
 (deftype ConsultingRateLoader [config]
   Lifecycle
   (init [_ system] system)
@@ -77,8 +118,8 @@
        txfile
        (:transactions txfile-content))
 
+      (issue-invoices (:dburi system) (:invoices txfile-content))
+
       system))
 
   (stop [_ system] system))
-
-#_[{:credit-account :congreve.liabilities, :debit-account :mastodonc.assets-pending-invoice, :codes {:8h {:description "Full day consulting", :rate 400}, :4h {:description "Half day consulting", :rate 200}}, :items [{:date #inst "2014-01-02T00:00:00.000-00:00", :code :8h, :expenses [{:description "Train", :cost 28} {:description "Bus", :cost 2}]}]}]
