@@ -274,22 +274,22 @@
     ))
 
 (defn invoices-page [dburi as-path]
-  (let [db (d/db (d/connect dburi))]
-    (fn this [req]
-      (let [routes (:jig.bidi/routes req)
-            invoices (db/get-invoices db)]
-        (->> invoices
-             (to-table
-              {:formatters
-               {:invoice-ref
-                (fn [x] [:a {:href (as-path req :invoice :invoice-ref (:invoice-ref x))} (:invoice-ref x)])
-                :invoice-date (comp date-formatter :invoice-date)
-                :issue-date (comp date-formatter :issue-date)
-                :output-tax-paid #(some-> % :output-tax-paid :juxt.accounting/date date-formatter)
+  (fn this [req]
+    (let [db (d/db (d/connect dburi))
+          routes (:jig.bidi/routes req)
+          invoices (db/get-invoices db)]
+      (->> invoices
+           (to-table
+            {:formatters
+             {:invoice-ref
+              (fn [x] [:a {:href (as-path req :invoice :invoice-ref (:invoice-ref x))} (:invoice-ref x)])
+              :invoice-date (comp date-formatter :invoice-date)
+              :issue-date (comp date-formatter :issue-date)
+              :output-tax-paid #(some-> % :output-tax-paid :juxt.accounting/date date-formatter)
 
-                }
-               :hide-columns #{:invoice :items}
-               :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)}))))))
+              }
+             :hide-columns #{:invoice :items}
+             :column-order (explicit-column-order :invoice-ref :invoice-date :issue-date :entity-name :invoice :subtotal :vat :total)})))))
 
 (defn invoice-pdf-page [dburi]
   (fn [req]

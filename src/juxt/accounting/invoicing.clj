@@ -160,6 +160,9 @@
   (spider (-> item :juxt.accounting/invoice-item-component)
           {:date [:juxt.accounting/_component first ; the parent entry
                   :juxt.accounting/date from-date (partial timeformat/unparse date-formatter)]
+           :sortable-date [:juxt.accounting/_component first
+                           :juxt.accounting/date from-date]
+           :sortable-amount [:juxt.accounting/amount -]
            :description :juxt/description
            :amount (fn [item] (str (.getSymbol (as-currency (:juxt.accounting/currency item)))
                                    (str (:juxt.accounting/amount item))))}))
@@ -225,10 +228,12 @@
                 :widths [25 60 15]
                 :header [{:color [255 255 255 255 255]} "Date" "Description" "Total"]}
 
-        ~@(for [{:keys [date description amount]} (map printable-item items)]
-            [[:cell {:align :left} [:chunk date]]
-             [:cell {:align :left} [:chunk description]]
-             [:cell {:align :right} [:chunk amount]]])
+        ~@(for [{:keys [date description amount sortable-amount]} (sort-by (juxt :sortable-date :sortable-amount) (map printable-item items))]
+            (do
+              (println sortable-amount)
+              [[:cell {:align :left} [:chunk date]]
+               [:cell {:align :left} [:chunk description]]
+               [:cell {:align :right} [:chunk amount]]]))
 
         [[:cell {:align :left} [:chunk ""]]
          [:cell {:align :left} [:chunk "Subtotal"]]

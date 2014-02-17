@@ -70,17 +70,7 @@
           db (d/db conn)
           company (d/entity db issuer)
           {accno :juxt.accounting/account-number sort-code :juxt.accounting/sort-code} (to-entity-map receiving-account db)
-          templater (invoicing/create-invoice-data-template
-                     ;; TODO: All these fields are part of the issuer
-                     {:title "Director"
-                      :signatory signatory
-                      :company-name (:juxt.accounting/name company)
-                      :company-address (edn/read-string (:juxt.accounting/registered-address company))
-                      :vat-no (:juxt.accounting/vat-number company)
-                      :vat-rate output-tax-rate
-                      :bank-account-no accno
-                      :bank-sort-code sort-code
-                      })
+
           code (:juxt.accounting/code (d/entity db entity))
           invoice
           (invoicing/issue-invoice
@@ -94,8 +84,22 @@
            :invoice-ref-prefix (format "%s-%s-" code (time/year (from-date invoice-date)))
            :initial-invoice-suffix "01"
            :purchase-order-reference purchase-order-reference)
+
+          templater (invoicing/create-invoice-data-template
+                     ;; TODO: All these fields are part of the issuer
+                     {:title "Director"
+                      :signatory signatory
+                      :company-name (:juxt.accounting/name company)
+                      :company-address (edn/read-string (:juxt.accounting/registered-address company))
+                      :vat-no (:juxt.accounting/vat-number company)
+                      :vat-rate output-tax-rate
+                      :bank-account-no accno
+                      :bank-sort-code sort-code
+                      })
           invoice-data (templater (d/db conn) invoice invoice-args)]
-      (debugf "Invoice data: %s" invoice-data)
+      (infof "Invoice data: %s" invoice-data)
+      (infof "First item is %s" (keys (:juxt.accounting/invoice-item-component (first (:items invoice-data)))
+                                      ))
       (invoicing/generate-pdf-for-invoice conn invoice-data)
       )))
 
