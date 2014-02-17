@@ -35,7 +35,7 @@
   (let [conn (d/connect dburi)
         db (d/db conn)]
     (doseq [{:keys [credit-account debit-account codes items]} transactions]
-      (doseq [{:keys [date code expenses]} items]
+      (doseq [{:keys [date code expenses note]} items]
         @(d/transact
           conn
           (db/assemble-transaction
@@ -45,7 +45,8 @@
             ;; Work
             [{:debit-account debit-account
               :credit-account credit-account
-              :description (get-in codes [code :description])
+              :description (str (get-in codes [code :description])
+                                (when note (str " (" note ")")))
               :amount (get-in codes [code :rate])}])
            (format "transaction loaded from %s" txfile)))
         (doseq [{:keys [description cost]} expenses]
