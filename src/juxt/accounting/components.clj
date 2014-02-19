@@ -47,19 +47,3 @@
       (d/delete-database (-> config :db :uri)))
     (d/shutdown false)
     system))
-
-(deftype DataExtractor [config]
-  Lifecycle
-  (init [_ system] system)
-  (start [_ system]
-    (assert (:accounts-file config) "No accounts file")
-    (let [accountsfile (io/file (:accounts-file config))]
-      (update-in system
-                [:inputs]
-                conj
-                (edn/read-string
-                 {:readers {'juxt.accounting/currency
-                            (fn [x] (to-currency-unit (str x)))}}
-                 (slurp (io/file (:accounts-file config))))
-                )))
-  (stop [_ system] system))
