@@ -17,13 +17,6 @@
    ;; Contribute :static-file
    }
 
-  #_:accounts/data-loader
-  #_{:jig/component juxt.accounting.components/DataLoader
-   :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
-   ;; These dependencies can concatenated with DataExtractor components
-   :jig/dependencies [:accounts/db]
-   }
-
   :accounts/service
   {:jig/component juxt.accounting.components/Website
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))

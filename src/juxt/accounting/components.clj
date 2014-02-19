@@ -23,7 +23,6 @@
    [clojure.edn :as edn]
    [clojurewerkz.money.currencies :as mc :refer (to-currency-unit)]
    [juxt.accounting.database :as db]
-   [juxt.accounting.driver :refer (process-accounts-file)]
    [juxt.accounting.static :refer (process-static-file)]
    [juxt.accounting.service :refer (create-bidi-routes)]
    [juxt.accounting.ofx :as ofx]
@@ -78,21 +77,6 @@
                    (fn [x] (to-currency-unit (str x)))}}
         (slurp (io/file (:static-file config)))) dburi)
       system))
-  (stop [_ system] system))
-
-(deftype DataLoader [config]
-  Lifecycle
-  (init [_ system] system)
-  (start [_ system]
-    (let [dburi (:dburi system)
-          _ (when-not dburi (ex-info "No dburi" {}))
-          data (-> (apply merge-with concat (:inputs system))
-                   ;; This update is only going to be necessary while entities is still a map
-                   (update-in [:entities] #(into {} %))
-                   (update-in [:views] #(into {} %)))]
-      ;; TODO Got to move all this logic out of this driver
-      (process-accounts-file data dburi)
-      (assoc system :data data)))
   (stop [_ system] system))
 
 ;; An optional module that can process statements. Should depend on the
