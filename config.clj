@@ -5,7 +5,7 @@
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))}
 
   :accounts/db
-  {:jig/component juxt.accounting.components/Database
+  {:jig/component juxt.accounting.database/Database
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
    :db {:uri "datomic:mem://juxt/accounts"}
    }

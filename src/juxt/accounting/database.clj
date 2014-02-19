@@ -18,6 +18,7 @@
   "Database access functions."
   (:refer-clojure :exclude (read-string))
   (:require
+   jig
    [clojure
     [set :as set]
     [edn :as edn]
@@ -31,7 +32,8 @@
    [juxt.datomic.extras.spider :refer (spider)]
    [clojurewerkz.money.amounts :as ma :refer (total zero)]
    [clojurewerkz.money.currencies :refer (to-currency-unit)]
-   [juxt.accounting.money :refer (as-money)]))
+   [juxt.accounting.money :refer (as-money)])
+  (:import (jig Lifecycle)))
 
 ;;(d/q '[:find ?a ?v :in $ :where [17592186045465 ?a ?v]] (as-db "datomic:mem://juxt/accounts"))
 
@@ -373,3 +375,22 @@
           (as-db db))
        (map (partial zipmap [:date :box1 :box6]))
        (sort-by :date)))
+
+(deftype Database [config]
+  Lifecycle
+  (init [_ system]
+    (let [dburi (-> config :db :uri)]
+      (when-not (-> config :db :persistent)
+        (infof "Deleting database: %s" dburi)
+        (d/delete-database dburi))
+      (infof "Initializing database: %s" dburi)
+      (init dburi)
+      (assoc system :dburi dburi)))
+  (start [_ system]
+    (infof "Starting Database component")
+    system)
+  (stop [_ system]
+    (when-not (-> config :db :persistent)
+      (d/delete-database (-> config :db :uri)))
+    (d/shutdown false)
+    system))
