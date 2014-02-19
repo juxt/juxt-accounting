@@ -17,8 +17,8 @@
    ;; Contribute :static-file
    }
 
-  :accounts/service
-  {:jig/component juxt.accounting.components/Website
+  :accounts/web
+  {:jig/component juxt.accounting.web/Website
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
    :jig/dependencies [:accounts/stencil-loader #_:accounts/statement-processor #_:accounts/data-loader]
    :jig.stencil/loader :accounts/stencil-loader
@@ -32,7 +32,7 @@
   :accounts/routing
   {:jig/component jig.bidi/Router
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/service]
+   :jig/dependencies [:accounts/web]
    ;; Optionally, route systems can be mounted on a sub-context
    ;;:jig.web/context "/accounts"
    }

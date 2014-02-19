@@ -14,13 +14,15 @@
 ;;
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
-(ns juxt.accounting.service
+(ns juxt.accounting.web
   (:require
+   jig
    [clojure.tools
     [trace :refer (deftrace)]
     [logging :refer :all]]
    [ring.util
     [response :as ring-resp]]
+   [jig.bidi :refer (add-bidi-routes)]
    [bidi.bidi :refer (->Redirect ->WrapMiddleware path-for)]
    [hiccup.core :refer (html h)]
    [ring.util.response :refer (file-response)]
@@ -38,7 +40,8 @@
    [stencil.core :as stencil]
    [juxt.datomic.extras :refer (to-entity-map)]
    [clojurewerkz.money.amounts :as ma :refer (total)]
-   [clojurewerkz.money.format :refer (format) :rename {format moneyformat}]))
+   [clojurewerkz.money.format :refer (format) :rename {format moneyformat}])
+  (:import (jig Lifecycle)))
 
 (defn css-page [req]
   (-> (css
@@ -405,3 +408,31 @@
       ["style.css" css-page]
       ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
       ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]]]))
+
+(def is-directory (every-pred identity (memfn exists) (memfn isDirectory)))
+
+(deftype Website [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (infof "Initializing Website: %s" (:jig/id config))
+    (let [dburi (:dburi system)
+          template-loader (get-in system [(:jig/id (jig.util/satisfying-dependency system config 'jig.stencil/StencilLoader)) :jig.stencil/loader])
+          ]
+      (doseq [k [:bootstrap-dist :jquery-dist]]
+        (when-not (is-directory (some-> config k io/file))
+          (throw (ex-info (format "Dist dir for %s not valid: %s" (name k) (-> config k)) {}))))
+
+      (-> system
+          (assoc-in [(:jig/id config) :data]
+                    (get-in system [:jig/config :jig/components (:juxt.accounting/data config)]))
+
+          ;;(link-to-stencil-loader config)
+
+          (add-bidi-routes config
+                           (create-bidi-routes
+                            (merge config
+                                   {:dburi dburi
+                                    :template-loader template-loader
+                                    :data (:data system)}))))))
+  (stop [_ system] system))

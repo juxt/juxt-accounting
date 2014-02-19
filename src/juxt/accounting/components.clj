@@ -24,7 +24,7 @@
    [clojurewerkz.money.currencies :as mc :refer (to-currency-unit)]
    [juxt.accounting.database :as db]
    [juxt.accounting.static :refer (process-static-file)]
-   [juxt.accounting.service :refer (create-bidi-routes)]
+   [juxt.accounting.web :refer (create-bidi-routes)]
    [juxt.accounting.ofx :as ofx]
    [datomic.api :as d])
   (:import (jig Lifecycle)))
@@ -62,34 +62,4 @@
                             (fn [x] (to-currency-unit (str x)))}}
                  (slurp (io/file (:accounts-file config))))
                 )))
-  (stop [_ system] system))
-
-
-
-(def is-directory (every-pred identity (memfn exists) (memfn isDirectory)))
-
-(deftype Website [config]
-  Lifecycle
-  (init [_ system] system)
-  (start [_ system]
-    (infof "Initializing Website: %s" (:jig/id config))
-    (let [dburi (:dburi system)
-          template-loader (get-in system [(:jig/id (jig.util/satisfying-dependency system config 'jig.stencil/StencilLoader)) :jig.stencil/loader])
-          ]
-      (doseq [k [:bootstrap-dist :jquery-dist]]
-        (when-not (is-directory (some-> config k io/file))
-          (throw (ex-info (format "Dist dir for %s not valid: %s" (name k) (-> config k)) {}))))
-
-      (-> system
-          (assoc-in [(:jig/id config) :data]
-                    (get-in system [:jig/config :jig/components (:juxt.accounting/data config)]))
-
-          ;;(link-to-stencil-loader config)
-
-          (add-bidi-routes config
-                           (create-bidi-routes
-                            (merge config
-                                   {:dburi dburi
-                                    :template-loader template-loader
-                                    :data (:data system)}))))))
   (stop [_ system] system))
