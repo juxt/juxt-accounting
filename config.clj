@@ -20,19 +20,23 @@
   :accounts/web
   {:jig/component juxt.accounting.web/Website
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/stencil-loader #_:accounts/statement-processor #_:accounts/data-loader]
+   :jig/dependencies [:accounts/stencil-loader]
    :jig.stencil/loader :accounts/stencil-loader
-
    :juxt.accounting/data :accounts/db
-
    :bootstrap-dist #=(eval (str (System/getProperty "user.home") "/src/bootstrap/dist"))
    :jquery-dist #=(eval (str (System/getProperty "user.home") "/src/jquery/dist"))
+   }
+
+  :accounts/entities-view
+  {:jig/component juxt.accounting.entities/Entities
+   :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
+   :jig/dependencies [:accounts/web]
    }
 
   :accounts/routing
   {:jig/component jig.bidi/Router
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
-   :jig/dependencies [:accounts/web]
+   :jig/dependencies [:accounts/web :accounts/entities-view]
    ;; Optionally, route systems can be mounted on a sub-context
    ;;:jig.web/context "/accounts"
    }
