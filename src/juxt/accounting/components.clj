@@ -19,8 +19,8 @@
    jig
    [jig.bidi :refer (add-bidi-routes)]
    [clojure.tools.logging :refer :all]
-   [clojure.java.io :as io]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojurewerkz.money.currencies :as mc :refer (to-currency-unit)]
    [juxt.accounting.database :as db]
    [juxt.accounting.static :refer (process-static-file)]
@@ -64,34 +64,7 @@
                 )))
   (stop [_ system] system))
 
-(deftype StaticLoader [config]
-  Lifecycle
-  (init [_ system] system)
-  (start [_ system]
-    (let [dburi (:dburi system)
-          _ (when-not dburi (ex-info "No dburi" {}))]
-      (assert (:static-file config) "No static file")
-      (process-static-file
-       (edn/read-string
-        {:readers {'juxt.accounting/currency
-                   (fn [x] (to-currency-unit (str x)))}}
-        (slurp (io/file (:static-file config)))) dburi)
-      system))
-  (stop [_ system] system))
 
-;; An optional module that can process statements. Should depend on the
-;; instance of the database component above.
-(deftype StatementProcessor [config]
-  Lifecycle
-  (init [_ system]
-    system)
-  (start [_ system]
-    (let [dir (:statement-directory config)]
-      (let [dburi (some-> system :jig/config :jig/components
-                          (get (:database config)) :db :uri)]
-        (ofx/add-transactions (io/file dir) dburi (:account-mappings config)))
-      system))
-  (stop [_ system] system))
 
 (def is-directory (every-pred identity (memfn exists) (memfn isDirectory)))
 

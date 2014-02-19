@@ -16,6 +16,7 @@
 ;;
 (ns juxt.accounting.ofx
   (:require
+   jig
    [clojure.xml :as xml]
    [instaparse.core :as insta]
    [datomic.api :as d]
@@ -32,6 +33,7 @@
    [clj-time.format :as timeformat]
    [clojure.java.io :as io]
    [clojure.tools.logging :refer :all])
+  (:import (jig Lifecycle))
   )
 
 (defn parser []
@@ -138,3 +140,18 @@
                    "ofx")))
               (throw (ex-info (format "Cannot recognise %s transaction name in statement, name is %s" (:type tx) (:name tx)) (assoc tx :credit-account credit-account :debit-account debit-account :account-mappings account-mappings))))))
         (throw (ex-info (format "Failed to find account, accno = %s, sort code = %s" (:accno acct) (:sort-code acct))))))))
+
+;; An optional module that can process statements.
+;; Depends on juxt.accounting.components.StaticLoader
+(deftype StatementProcessor [config]
+  Lifecycle
+  (init [_ system]
+    system)
+  (start [_ system]
+    (let [dir (:statement-directory config)]
+      (let [dburi (some-> system :jig/config :jig/components
+                          (get (:database config)) :db :uri)]
+        (add-transactions (io/file dir) dburi (:account-mappings config)))
+      system))
+  (stop [_ system] system)
+)

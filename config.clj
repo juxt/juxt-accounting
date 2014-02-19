@@ -11,7 +11,7 @@
    }
 
   :accounts/static-loader
-  {:jig/component juxt.accounting.components/StaticLoader
+  {:jig/component juxt.accounting.static/StaticLoader
    :jig/project #=(eval (str (System/getProperty "user.home") "/src/accounting/project.clj"))
    :jig/dependencies [:accounts/db]
    ;; Contribute :static-file

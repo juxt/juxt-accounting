@@ -22,9 +22,13 @@
 
 (ns juxt.accounting.static
   (:require
+   jig
    [datomic.api :as d]
+   [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [juxt.accounting.database :as db]
-   [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]))
+   [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)])
+  (:import (jig Lifecycle)))
 
 (defn process-static-file [{:keys [entities accounts]} dburi]
   (let [conn (d/connect dburi)]
@@ -90,3 +94,18 @@
           ))
 
     ))
+
+(deftype StaticLoader [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (let [dburi (:dburi system)
+          _ (when-not dburi (ex-info "No dburi" {}))]
+      (assert (:static-file config) "No static file")
+      (process-static-file
+       (edn/read-string
+        {:readers {'juxt.accounting/currency
+                   (fn [x] (to-currency-unit (str x)))}}
+        (slurp (io/file (:static-file config)))) dburi)
+      system))
+  (stop [_ system] system))
