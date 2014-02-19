@@ -229,11 +229,9 @@
                 :header [{:color [255 255 255 255 255]} "Date" "Description" "Total"]}
 
         ~@(for [{:keys [date description amount sortable-amount]} (sort-by (juxt :sortable-date :sortable-amount) (map printable-item items))]
-            (do
-              (println sortable-amount)
-              [[:cell {:align :left} [:chunk date]]
-               [:cell {:align :left} [:chunk description]]
-               [:cell {:align :right} [:chunk amount]]]))
+            [[:cell {:align :left} [:chunk date]]
+             [:cell {:align :left} [:chunk description]]
+             [:cell {:align :right} [:chunk amount]]])
 
         [[:cell {:align :left} [:chunk ""]]
          [:cell {:align :left} [:chunk "Subtotal"]]
