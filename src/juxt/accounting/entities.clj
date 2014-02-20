@@ -21,6 +21,9 @@
    [jig.bidi :refer (add-bidi-routes)])
   (:import (jig Lifecycle)))
 
+;; This was an attempt to try out some pluggability, but it's proven
+;; difficult to get the boilerplate added. A rethink is needed.
+
 (defn entities-page []
   (fn [req]
     {:status 200 :body
