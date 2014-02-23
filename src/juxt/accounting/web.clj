@@ -106,7 +106,7 @@
         (to-table {:column-order (explicit-column-order :ident :entity-name :account-name :currency :balance)
                    :hide-columns #{:entity :component-count}
                    :formatters {:ident (fn [x]
-                                         [:a {:href (as-path req :account :account-id (name (:ident x)))} (name (:ident x))])
+                                         [:a {:href (as-path req :account :account-id (:ident x))} (name (:ident x))])
                                 :balance #(moneyformat (:balance %) java.util.Locale/UK)}
                    :classes {:balance :numeric}}))
    #_[:p "Total balance (should be zero if all accounts reconcile): " (moneyformat (apply db/reconcile-accounts db (map :ident accounts)) java.util.Locale/UK)]))
@@ -143,9 +143,18 @@
     (let [db (d/db (d/connect dburi))]
       (list
        (to-table {:hide-columns #{}
-                  :column-order (explicit-column-order :ident :name)}
+                  :column-order (explicit-column-order :ident :name)
+                  :formatters {:ident (fn [x] [:a {:href (as-path req :entity :entity (:ident x))} (:ident x)])}}
                  (->> (db/get-legal-entities-as-table db)
                       (sort-by :ident)))))))
+
+(defn entity-page [dburi as-path]
+  (fn [{{entity :entity :as rp} :route-params :as req}]
+    (list
+     (let [db (d/db (d/connect dburi))]
+       (let [accounts (db/get-accounts-as-table db)]
+         (accounts-table req as-path db (filter #(= (:entity %) entity) accounts)))
+       ))))
 
 (defn accounts-page [dburi as-path]
   (fn [req]
@@ -365,6 +374,7 @@
                   (apply path-for (:jig.bidi/routes req) (k @p) args))]
     @(deliver p {:index (index-page p)
                  :entities (entities-page dburi as-path)
+                 :entity (entity-page dburi as-path)
                  :accounts (accounts-page dburi as-path)
                  :account (account-page dburi as-path)
                  :views (views-page data as-path)
@@ -392,8 +402,9 @@
            [
             ["index" (:index handlers)]
             ["entities/" (:entities handlers)]
+            [["entities/" [keyword :entity]] (:entity handlers)]
             ["accounts/" (:accounts handlers)]
-            [["accounts/" [#".*" :account-id]] (:account handlers)]
+            [["accounts/" [keyword :account-id]] (:account handlers)]
             ["views/" (:views handlers)]
             [["views/" :view-id] (:view handlers)]
             ["invoices/" (:invoices handlers)]
