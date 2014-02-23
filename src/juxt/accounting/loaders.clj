@@ -15,11 +15,14 @@
 ;; Please see the LICENSE file for a copy of the GNU Affero General Public License.
 ;;
 (ns juxt.accounting.loaders
+  (:refer-clojure :exclude [read *data-readers*])
   (:require
    jig
    [datomic.api :as d]
    [clojure.java.io :as io]
    [juxt.datomic.extras :refer (to-entity-map)]
+   [clojure.tools.reader :refer (read *data-readers*)]
+   [clojure.tools.reader.reader-types :refer (indexing-push-back-reader source-logging-push-back-reader)]
    [clojure.edn :as edn]
    [clj-time.core :as time]
    [clj-time.coerce :refer (from-date)]
@@ -27,7 +30,8 @@
    [clojure.tools.logging :refer :all]
    [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]
    [juxt.accounting.database :as db]
-   [juxt.accounting.invoicing :as invoicing])
+   [juxt.accounting.invoicing :as invoicing]
+   )
   (:import (jig Lifecycle))
   )
 
@@ -38,7 +42,7 @@
       (assert credit-account "Transaction range must have a credit account")
       (assert debit-account "Transaction range must have a debit account")
       (assert codes "Transaction range must have codes")
-      (doseq [{:keys [date code expenses note units]} items]
+      (doseq [{:keys [date code expenses note units] :as item} items]
         (assert code (format "Every item must have a code, date is %s" date))
         (assert (get-in codes [code :rate]) (format "Failed to find rate for code: %s" code))
         @(d/transact
@@ -54,8 +58,8 @@
                                 (when note (str " (" note ")")))
               :amount (* (get-in codes [code :rate]) (or units 1))
               }])
-           (format "transaction loaded from %s" txfile)))
-        (doseq [{:keys [description cost]} expenses]
+           (format "transaction loaded from line %s of %s" (:line (meta item)) txfile)))
+        (doseq [{:keys [description cost] :as expense} expenses]
           @(d/transact
             conn
             (db/assemble-transaction
@@ -68,7 +72,7 @@
                 :description description
                 :amount cost}]
               )
-             (format "expense loaded from %s" txfile))))))))
+             (format "expense loaded from line %s of %s" (:line (meta expense)) txfile))))))))
 
 (defn issue-invoices [dburi invoices]
   (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
@@ -119,10 +123,13 @@
     (let [txfile (io/file (:transaction-file config))
           _ (assert (.exists txfile) (format "Transaction file doesn't exist: %s" txfile))
           _ (assert (.isFile txfile) (format "Transaction exists but is not a file: %s" txfile))
+
           txfile-content
-          (edn/read-string
-           {:readers {'juxt.accounting/currency (fn [x] (to-currency-unit (str x)))}}
-           (slurp txfile))]
+          (binding [*data-readers* {'juxt.accounting/currency (fn [x] (to-currency-unit (str x)))}]
+            (read
+             (indexing-push-back-reader
+              (java.io.PushbackReader. (io/reader txfile))
+              )))]
 
       (add-consulting-rate-transations
        (:dburi system)

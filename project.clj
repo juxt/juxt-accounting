@@ -21,16 +21,22 @@
   [[org.clojure/clojure "1.5.1"]
    ;; Logging
    [org.clojure/tools.logging "0.2.6"]
+
    [ch.qos.logback/logback-classic "1.0.7" :exclusions [org.slf4j/slf4j-api]]
    [org.slf4j/jul-to-slf4j "1.7.2"]
    [org.slf4j/jcl-over-slf4j "1.7.2"]
    [org.slf4j/log4j-over-slf4j "1.7.2"]
+
    ;; Database
    [juxt/datomic-extras "1.0.3"
     :exclusions [org.slf4j/slf4j-nop
                  org.slf4j/jul-to-slf4j
                  org.slf4j/jcl-over-slf4j
                  org.slf4j/log4j-over-slf4j]]
+
+   ;; EDN reader with location metadata
+   [org.clojure/tools.reader "0.8.3"]
+
    ;; Time!
    [clj-time "0.5.1"]
    ;; Money!
