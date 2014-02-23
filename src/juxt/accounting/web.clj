@@ -224,8 +224,8 @@
                    :hide-columns #{:entry :type :account :id :other-account :invoice-item}
                    :formatters {:date (comp date-formatter :date)
                                 :value (fn [{:keys [value other-account]}]
-                                         ;; link to 'other account'
-                                         (moneyformat value java.util.Locale/UK))}
+                                         [:a {:href (as-path req :account :account-id (-> other-account :db/ident))}
+                                          (moneyformat value java.util.Locale/UK)])}
                    :classes {:value "numeric"}}))
    :otherwise
    [:pre (with-out-str (clojure.pprint/pprint records))]))
