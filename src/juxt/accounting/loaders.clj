@@ -141,3 +141,52 @@
       system))
 
   (stop [_ system] system))
+
+
+(defn add-fixed-rate-transations [dburi txfile transactions]
+  (let [conn (d/connect dburi)
+        db (d/db conn)]
+    (doseq [{:keys [credit-account debit-account date description amount] :as tx} transactions]
+      (assert credit-account "Transaction range must have a credit account")
+      (assert debit-account "Transaction range must have a debit account")
+      @(d/transact
+          conn
+          (db/assemble-transaction
+              db
+              date
+              (concat
+               ;; Work
+               [{:debit-account debit-account
+                 :credit-account credit-account
+                 :description description
+                 :amount amount
+                 }])
+              (format "transaction loaded from line %s of %s" (:line (meta tx)) txfile))))))
+
+(deftype FixedPriceLoader [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (assert (:dburi system))
+    (assert (:transaction-file config) "No transaction file")
+    (let [txfile (io/file (:transaction-file config))
+          _ (assert (.exists txfile) (format "Transaction file doesn't exist: %s" txfile))
+          _ (assert (.isFile txfile) (format "Transaction exists but is not a file: %s" txfile))
+
+          txfile-content
+          (binding [*data-readers* {'juxt.accounting/currency (fn [x] (to-currency-unit (str x)))}]
+            (read
+             (indexing-push-back-reader
+              (java.io.PushbackReader. (io/reader txfile))
+              )))]
+
+      (add-fixed-rate-transations
+       (:dburi system)
+       txfile
+       (:transactions txfile-content))
+
+      (issue-invoices (:dburi system) (:invoices txfile-content))
+
+      system))
+
+  (stop [_ system] system))
