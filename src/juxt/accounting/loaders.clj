@@ -35,7 +35,12 @@
   (let [conn (d/connect dburi)
         db (d/db conn)]
     (doseq [{:keys [credit-account debit-account codes items]} transactions]
-      (doseq [{:keys [date code expenses note]} items]
+      (assert credit-account "Transaction range must have a credit account")
+      (assert debit-account "Transaction range must have a debit account")
+      (assert codes "Transaction range must have codes")
+      (doseq [{:keys [date code expenses note units]} items]
+        (assert code (format "Every item must have a code, date is %s" date))
+        (assert (get-in codes [code :rate]) (format "Failed to find rate for code: %s" code))
         @(d/transact
           conn
           (db/assemble-transaction
@@ -47,7 +52,8 @@
               :credit-account credit-account
               :description (str (get-in codes [code :description])
                                 (when note (str " (" note ")")))
-              :amount (get-in codes [code :rate])}])
+              :amount (* (get-in codes [code :rate]) (or units 1))
+              }])
            (format "transaction loaded from %s" txfile)))
         (doseq [{:keys [description cost]} expenses]
           @(d/transact

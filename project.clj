@@ -54,6 +54,7 @@
    ;; Jig
    [jig ~jig-version]
    [jig/bidi ~jig-version]
+
    [jig/stencil ~jig-version]
    [jig/http-kit ~jig-version]
    [jig/protocols ~jig-version]

@@ -42,5 +42,11 @@
     (let [res (parse amount)]
       (assert (= (.getCurrencyUnit res) (as-currency currency)))
       res))
+
+  BigDecimal
+  (as-money [amount currency]
+    (let [rounded (.setScale amount 2 java.math.RoundingMode/HALF_UP)]
+      (org.joda.money.Money/of (as-currency currency) rounded)))
+
   Number
-  (as-money [amount currency] (org.joda.money.Money/of (as-currency currency) (double amount))))
+  (as-money [amount currency] (as-money (BigDecimal. (double amount)) currency)))

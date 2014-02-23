@@ -23,7 +23,7 @@
    [ring.util
     [response :as ring-resp]]
    [jig.bidi :refer (add-bidi-routes)]
-   [bidi.bidi :refer (->Redirect ->WrapMiddleware path-for)]
+   [bidi.bidi :refer (->Redirect ->WrapMiddleware path-for match-route)]
    [hiccup.core :refer (html h)]
    [ring.util.response :refer (file-response)]
    [ring.middleware.content-type :refer (wrap-content-type)]
@@ -183,10 +183,10 @@
     :formatters
     {:date (comp date-formatter :date)
      :net (fn [x]
-            [:a {:href (as-path req :account :account-id (-> x :other-account :db/ident name))}
+            [:a {:href (as-path req :account :account-id (-> x :other-account :db/ident))}
              (-> x :net uk-money-format)])
      :vat (fn [x]
-            [:a {:href (as-path req :account :account-id (-> x :vat-account :db/ident name))}
+            [:a {:href (as-path req :account :account-id (-> x :vat-account :db/ident))}
              (-> x :vat uk-money-format)])
      :total (comp uk-money-format :total)
      }
@@ -355,6 +355,10 @@
      ring-resp/response
      (ring-resp/content-type "text/plain")
      (ring-resp/charset "utf-8"))))
+
+#_(match-route
+ (-> user/system :accounts/routing :jig.bidi/routes)
+ "/accounts/arnold-clark.assets")
 
 (defn wrap-promise [p]
   (letfn [(ensure-realized [] (assert (realized? p) "Cannot lookup until deref is realized"))]
