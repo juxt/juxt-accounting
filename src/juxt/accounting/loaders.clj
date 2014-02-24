@@ -187,10 +187,34 @@
 
       (issue-invoices (:dburi system) (:invoices txfile-content))
 
+
       system))
 
   (stop [_ system] system))
 
+
+(deftype Invoicer [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (assert (:dburi system))
+    (assert (:transaction-file config) "No transaction file")
+    (let [txfile (io/file (:transaction-file config))
+          _ (assert (.exists txfile) (format "Transaction file doesn't exist: %s" txfile))
+          _ (assert (.isFile txfile) (format "Transaction exists but is not a file: %s" txfile))
+
+          txfile-content
+          (binding [*data-readers* {'juxt.accounting/currency (fn [x] (to-currency-unit (str x)))}]
+            (read
+             (indexing-push-back-reader
+              (java.io.PushbackReader. (io/reader txfile))
+              )))]
+
+      (issue-invoices (:dburi system) txfile-content)
+
+      system))
+
+  (stop [_ system] system))
 
 (defn add-payable-invoices [dburi txfile transactions]
   (let [conn (d/connect dburi)

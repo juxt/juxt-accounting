@@ -50,37 +50,26 @@
               :ident (keyword (str (clojure.core/name ident) ".accounts-receivable"))
               :entity ident
               :currency (to-currency-unit "GBP")
-              :name "Accounts Receivable"
-              )
-          (db/create-account!
-              conn
-              :ident (keyword (str (clojure.core/name ident) ".assets"))
-              :entity ident
-              :currency (to-currency-unit "GBP")
-              :name "Work supplied"
-              )
+              :name "Accounts Receivable")
           (db/create-account!
               conn
               :ident (keyword (str (clojure.core/name ident) ".assets-pending-invoice"))
               :entity ident
               :currency (to-currency-unit "GBP")
-              :name "Billable work"
-              ))
+              :name "Billable work"))
         (when supplier
           (db/create-account!
               conn
               :ident (keyword (str (clojure.core/name ident) ".accounts-payable"))
               :entity ident
               :currency (to-currency-unit "GBP")
-              :name "Accounts Receivable"
-              )
+              :name "Accounts Receivable")
           (db/create-account!
               conn
               :ident (keyword (str (clojure.core/name ident) ".liabilities"))
               :entity ident
               :currency (to-currency-unit "GBP")
-              :name "Billable work"
-              ))))
+              :name "Billable work"))))
 
     (doseq [{:keys [ident name entity currency account-no sort-code]} accounts]
       (db/create-account!

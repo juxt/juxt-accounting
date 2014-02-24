@@ -291,6 +291,7 @@
           routes (:jig.bidi/routes req)
           invoices (db/get-invoices db)]
       (->> invoices
+           (sort-by :invoice-ref)
            (to-table
             {:formatters
              {:invoice-ref
