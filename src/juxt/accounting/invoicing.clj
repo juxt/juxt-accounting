@@ -85,7 +85,7 @@
         [:db/add invoice :juxt.accounting/invoice-date (db/to-date invoice-date)]
         [:db/add invoice :juxt.accounting/issue-date (db/to-date issue-date)]
         (when purchase-order-reference [:db/add invoice :juxt.accounting/purchase-order-reference purchase-order-reference])
-        [:db/add txid :juxt/description "invoice"]
+        [:db/add txid :juxt/description (format "Invoice to %s (%s)" (:juxt.accounting/name (to-entity-map entity db)) (.format (java.text.SimpleDateFormat. "yyyy-MM-dd") (db/to-date issue-date)))]
         ]
 
        ;; Add statements for each item in the invoice.
