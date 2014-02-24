@@ -116,7 +116,7 @@
                                                       (assoc m k (total (map :value v))))
                                                     {} (group-by (comp :db/id :account) components))]
              {:amount amount :debit-account debit-account :credit-account credit-account :description description :component-type :net})
-           [{:amount vat :debit-account debit-account :credit-account vat-account :description "VAT" :component-type :vat}])
+           [{:amount vat :debit-account debit-account :credit-account vat-account :description (str "VAT on " description) :component-type :vat}])
           "invoicing: Invoice credits")))))))
 
 ;; TODO This isn't really issuing the invoice because that's only when

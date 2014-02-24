@@ -190,3 +190,56 @@
       system))
 
   (stop [_ system] system))
+
+
+(defn add-payable-invoices [dburi txfile transactions]
+  (let [conn (d/connect dburi)
+        db (d/db conn)]
+    (doseq [{:keys [date credit-account debit-account vat-account description subtotal vat total] :as tx} transactions]
+      (assert credit-account "Transaction must have a credit account")
+      (assert debit-account "Transaction must have a debit account")
+      (assert vat-account "Transaction must have a VAT account")
+      @(d/transact
+          conn
+          (db/assemble-transaction
+              db
+              date
+              (concat
+               ;; Work
+               [{:debit-account debit-account
+                 :credit-account credit-account
+                 :description description
+                 :amount subtotal
+                 }
+                {:debit-account vat-account
+                 :credit-account credit-account
+                 :description (str "VAT on " description)
+                 :amount vat
+                 }])
+              (format "Invoice payable, line %s of %s" (:line (meta tx)) txfile))))))
+
+(deftype InvoicesPayableLoader [config]
+  Lifecycle
+  (init [_ system] system)
+  (start [_ system]
+    (assert (:dburi system))
+    (assert (:transaction-file config) "No transaction file")
+    (let [txfile (io/file (:transaction-file config))
+          _ (assert (.exists txfile) (format "Transaction file doesn't exist: %s" txfile))
+          _ (assert (.isFile txfile) (format "Transaction exists but is not a file: %s" txfile))
+
+          txfile-content
+          (binding [*data-readers* {'juxt.accounting/currency (fn [x] (to-currency-unit (str x)))}]
+            (read
+             (indexing-push-back-reader
+              (java.io.PushbackReader. (io/reader txfile))
+              )))]
+
+      (add-payable-invoices
+       (:dburi system)
+       txfile
+       txfile-content)
+
+      system))
+
+  (stop [_ system] system))
