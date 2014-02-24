@@ -196,17 +196,17 @@
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :juxt.accounting/output-tax
+  :db/ident :juxt.accounting/vat
   :db/valueType :db.type/bigdec
   :db/cardinality :db.cardinality/one
-  :db/doc "Output tax (UK VAT or sales tax) added to an invoice"
+  :db/doc "VAT added to an invoice"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]
-  :db/ident :juxt.accounting/output-tax-paid
+  :db/ident :juxt.accounting/vat-paid
   :db/valueType :db.type/ref
   :db/cardinality :db.cardinality/one
-  :db/doc "Output tax paid stamp (reference to VAT return entity)"
+  :db/doc "VAT tax paid (reference to VAT return entity)"
   :db.install/_attribute :db.part/db}
 
  {:db/id #db/id[:db.part/db]

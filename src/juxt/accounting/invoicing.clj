@@ -46,19 +46,19 @@
                        & {entity :entity
                           components :components
                           debit-account :debit-to
-                          output-tax-account :output-tax-account
-                          output-tax-rate :output-tax-rate
+                          vat-account :vat-account
+                          vat-rate :vat-rate
                           invoice-date :invoice-date
                           issue-date :issue-date
                           invoice-ref-prefix :invoice-ref-prefix
                           first-invoice-ref :initial-invoice-suffix
                           purchase-order-reference :purchase-order-reference}]
-  {:pre [output-tax-rate output-tax-account]}
+  {:pre [vat-rate vat-account]}
 
   ;; TODO: Must also come from a set of accounts with a single common currency - write a test first
 
-  ;; Ensure output-tax-account is real
-  (assert (:db/id (to-entity-map output-tax-account db)) (str "No such account: " output-tax-account))
+  ;; Ensure vat-account is real
+  (assert (:db/id (to-entity-map vat-account db)) (str "No such account: " vat-account))
 
   (assert (pos? (count components)) (format "No items for invoice %s issued on date %s" invoice-ref-prefix issue-date))
 
@@ -67,10 +67,10 @@
    (remove
     nil?
     (let [subtotal (total (map :value components))
-          output-tax (-> subtotal (.multipliedBy
-                                   (double output-tax-rate)
+          vat (-> subtotal (.multipliedBy
+                                   (double vat-rate)
                                    java.math.RoundingMode/HALF_DOWN))
-          tot (ma/plus subtotal output-tax)
+          tot (ma/plus subtotal vat)
           txid (d/tempid :db.part/tx)]
 
       (concat
@@ -80,7 +80,7 @@
         [:juxt.accounting/generate-invoice-ref invoice invoice-ref-prefix first-invoice-ref]
         [:db/add invoice :juxt.accounting/subtotal (.getAmount subtotal)]
         [:db/add invoice :juxt.accounting/currency (.getCode (.getCurrencyUnit subtotal))]
-        [:db/add invoice :juxt.accounting/output-tax (.getAmount output-tax)]
+        [:db/add invoice :juxt.accounting/vat (.getAmount vat)]
         [:db/add invoice :juxt.accounting/total (.getAmount tot)]
         [:db/add invoice :juxt.accounting/invoice-date (db/to-date invoice-date)]
         [:db/add invoice :juxt.accounting/issue-date (db/to-date issue-date)]
@@ -101,7 +101,7 @@
        ;; Credit the accounts where the entries are drawn from because
        ;; they've now been invoiced.
 
-       ;; Credit the VAT account, HMRC output-tax is incurred at the
+       ;; Credit the VAT account, HMRC VAT is incurred at the
        ;; time of invoice (unless cash-accounting basis).
 
        ;; Debit debit-account with total including VAT. This now needs
@@ -116,7 +116,7 @@
                                                       (assoc m k (total (map :value v))))
                                                     {} (group-by (comp :db/id :account) components))]
              {:amount amount :debit-account debit-account :credit-account credit-account :description description :component-type :net})
-           [{:amount output-tax :debit-account debit-account :credit-account output-tax-account :description "VAT" :component-type :vat}])
+           [{:amount vat :debit-account debit-account :credit-account vat-account :description "VAT" :component-type :vat}])
           "invoicing: Invoice credits")))))))
 
 ;; TODO This isn't really issuing the invoice because that's only when
@@ -124,8 +124,8 @@
 ;; Perhaps this should be prepare-invoice, and prepare-invoice should be prepare-invoice-tx-data
 (defn issue-invoice [conn & {account-to-credit :draw-from
                              account-to-debit :debit-to
-                             output-tax-account :output-tax-account
-                             output-tax-rate :output-tax-rate
+                             vat-account :vat-account
+                             vat-rate :vat-rate
                              invoice-date :invoice-date
                              issue-date :issue-date
                              invoice-ref-prefix :invoice-ref-prefix
@@ -147,8 +147,8 @@
                           :entity entity
                           :components components-to-invoice
                           :debit-to account-to-debit
-                          :output-tax-account output-tax-account
-                          :output-tax-rate output-tax-rate
+                          :vat-account vat-account
+                          :vat-rate vat-rate
                           :invoice-date invoice-date
                           :issue-date issue-date
                           :invoice-ref-prefix invoice-ref-prefix
@@ -170,7 +170,7 @@
 (defn print-invoice [{:keys [items subtotal vat total invoice-date issue-date
                              invoice-ref invoice-addressee invoice-address
                              client-name issuer currency purchase-order-reference
-                             output-tax-rate]} out]
+                             vat-rate]} out]
   (debugf "Printing invoice, number of items is %d" (count items))
   (let [currency-symbol (.getSymbol (as-currency currency))]
     (pdf
@@ -238,7 +238,7 @@
          [:cell {:align :right} [:chunk ~(str currency-symbol subtotal)]]]
 
         [[:cell {:align :left} [:chunk ""]]
-         [:cell {:align :left} [:chunk ~(str "VAT @ " (.format (java.text.DecimalFormat. "##") (* 100 output-tax-rate)) "%")]]
+         [:cell {:align :left} [:chunk ~(str "VAT @ " (.format (java.text.DecimalFormat. "##") (* 100 vat-rate)) "%")]]
          [:cell {:align :right} [:chunk ~(str currency-symbol vat)]]]
 
         [[:cell {:align :left} [:chunk ""]]
@@ -265,14 +265,14 @@
 (defn create-invoice-data-template [issuer-fields]
   {:pre [(every? (set (keys issuer-fields))
                  [:title :signatory :company-name :company-address :vat-no :bank-account-no :bank-sort-code])]}
-  (fn create-invoice-data [db invoice {:keys [output-dir output-tax-rate]}]
+  (fn create-invoice-data [db invoice {:keys [output-dir vat-rate]}]
     {:pre [(db/entity? invoice)]}
     (let [entity (d/entity db (:juxt.accounting/entity invoice))]
       (merge
        {:issuer issuer-fields
         :output-path (str output-dir java.io.File/separator
                           (:juxt.accounting/invoice-ref invoice) ".pdf")
-        :output-tax-rate output-tax-rate
+        :vat-rate vat-rate
         }
        (spider entity
                {:client-name :juxt.accounting/name
@@ -286,7 +286,7 @@
                  :items :juxt.accounting/item
                  :currency :juxt.accounting/currency
                  :subtotal :juxt.accounting/subtotal
-                 :vat :juxt.accounting/output-tax
+                 :vat :juxt.accounting/vat
                  :total :juxt.accounting/total
                  :purchase-order-reference :juxt.accounting/purchase-order-reference
                  })))))

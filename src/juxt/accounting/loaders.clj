@@ -75,7 +75,7 @@
              (format "expense loaded from line %s of %s" (:line (meta expense)) txfile))))))))
 
 (defn issue-invoices [dburi invoices]
-  (doseq [{:keys [entity draw-from debit-to output-tax-rate output-tax-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
+  (doseq [{:keys [entity draw-from debit-to vat-rate vat-account invoice-date output-dir issue-date issuer receiving-account signatory purchase-order-reference] :as invoice-args} invoices]
     (debugf "Preparing invoice")
     (let [conn (d/connect dburi)
           db (d/db conn)
@@ -88,8 +88,8 @@
            conn
            :draw-from draw-from
            :debit-to debit-to
-           :output-tax-account output-tax-account
-           :output-tax-rate output-tax-rate
+           :vat-account vat-account
+           :vat-rate vat-rate
            :invoice-date invoice-date
            :issue-date issue-date
            :invoice-ref-prefix (format "%s-%s-" code (time/year (from-date invoice-date)))
@@ -103,7 +103,7 @@
                       :company-name (:juxt.accounting/name company)
                       :company-address (edn/read-string (:juxt.accounting/registered-address company))
                       :vat-no (:juxt.accounting/vat-number company)
-                      :vat-rate output-tax-rate
+                      :vat-rate vat-rate
                       :bank-account-no accno
                       :bank-sort-code sort-code
                       })

@@ -349,7 +349,7 @@
                     :issue-date [:invoice :juxt.accounting/issue-date]
                     :total [:invoice :juxt.accounting/total]
                     :subtotal [:invoice :juxt.accounting/subtotal]
-                    :output-tax [:invoice :juxt.accounting/output-tax]
+                    :vat [:invoice :juxt.accounting/vat]
                     }))
      ;; Sort
      (sort-by :invoice-date))))
