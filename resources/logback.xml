@@ -51,6 +51,6 @@
 
   <!-- To log Jig internals, enable this
   -->
-  <logger name="jig" level="ALL" />
+  <logger name="jig" level="INFO" />
 
 </configuration>
