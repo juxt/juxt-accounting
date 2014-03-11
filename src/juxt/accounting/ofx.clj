@@ -137,7 +137,7 @@
                      :credit-account credit-account
                      :amount (as-money (Math/abs (Double/parseDouble (:amount tx))) (:currency tx))
                      :description (format "%s (ref: %s)" (:name tx) (:memo tx))}]
-                   "ofx")))
+                   "Loaded from NatWest statement")))
               (throw (ex-info (format "Cannot recognise %s transaction name in statement, name is %s, memo is %s" (:type tx) (:name tx) (:memo tx)) (assoc tx :credit-account credit-account :debit-account debit-account :account-mappings account-mappings))))))
         (throw (ex-info (format "Failed to find account, accno = %s, sort code = %s" (:accno acct) (:sort-code acct))))))))
 
