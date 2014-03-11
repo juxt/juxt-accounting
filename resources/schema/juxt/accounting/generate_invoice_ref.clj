@@ -7,18 +7,20 @@
 
 [[:db/add invoice :juxt.accounting/invoice-ref
   (let [s (ffirst
-           (datomic.api/q
-            '[:find ?np :in $ ?prefix ?init
-              :where
-              [_ :juxt.accounting/invoice-ref ?ref]
-              [(.startsWith ^String ?ref ?prefix)]
-              [(count ?prefix) ?len]
-              [(.substring ^String ?ref ?len) ?s]
-              [(Integer/parseInt ?s) ?si]
-              [(inc ?si) ?sn]
-              [(count ?init) ?w] ; 0-padded length of our incrementing number
-              [(str "%0" ?w "d") ?fs] ; eg. %03d - for padding with 0s
-              [(format ?fs ?sn) ?np]]
-            db prefix init))]
+           (reverse
+            (sort
+             (datomic.api/q
+              '[:find ?np :in $ ?prefix ?init
+                :where
+                [_ :juxt.accounting/invoice-ref ?ref]
+                [(.startsWith ^String ?ref ?prefix)]
+                [(count ?prefix) ?len]
+                [(.substring ^String ?ref ?len) ?s]
+                [(Integer/parseInt ?s) ?si]
+                [(inc ?si) ?sn]
+                [(count ?init) ?w] ; 0-padded length of our incrementing number
+                [(str "%0" ?w "d") ?fs] ; eg. %03d - for padding with 0s
+                [(format ?fs ?sn) ?np]]
+              db prefix init))))]
     (str prefix (or s init))
     )]]
