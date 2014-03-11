@@ -227,7 +227,7 @@
      (nil? (:db/id (to-entity-map debit-account db)))
      (throw (ex-info (format "Debit account does not exist: %s" debit-account) {}))
      (nil? (:db/id (to-entity-map credit-account db)))
-     (throw (ex-info (format "Credit account does not exist: %s" debit-account) {}))
+     (throw (ex-info (format "Credit account does not exist: %s" credit-account) {}))
      (nil? (:juxt.accounting/currency (to-entity-map debit-account db)))
      (throw (ex-info (format "Debit account does not have a currency: %s" debit-account) {}))
      (nil? (:juxt.accounting/currency (to-entity-map credit-account db)))
