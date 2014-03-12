@@ -7,6 +7,7 @@
    [clojure.tools.reader :refer (read *data-readers* read-string)]
    [clojure.tools.reader.reader-types :refer (indexing-push-back-reader source-logging-push-back-reader)]
    [clojurewerkz.money.currencies :as mc :refer (GBP to-currency-unit)]
+   [clojurewerkz.money.amounts :as ma]
    [juxt.accounting.database :as db]
    [juxt.accounting.money :refer (as-money)]
    [clojure.pprint :refer (pprint)]
@@ -60,12 +61,10 @@
   [])
 
 ;; TODO Remove holidays
-;; TODO Less 10%
 
 (defn add-associate-transactions [dburi txfile m]
   (let [conn (d/connect dburi)
         db (d/db conn)]
-    ;;(pprint (db/get-accounts db))
     (doseq [{:keys [date debit-account credit-account description amount cost name]}
             (mapcat get-billings (:associates m) (repeat (time/local-date 2014 9 15)))]
       @(d/transact

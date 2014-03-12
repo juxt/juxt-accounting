@@ -40,7 +40,7 @@
    ;; Time!
    [clj-time "0.5.1"]
    ;; Money!
-   [clojurewerkz/money "1.3.0"]
+   [clojurewerkz/money "1.4.0"]
    ;; Printing
    [clj-pdf "1.10.0"]
    ;; Hiccup for HTML generation

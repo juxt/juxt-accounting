@@ -32,7 +32,7 @@
     [core :as time]
     [coerce :refer (from-date)]
     [format :as timeformat]]
-   [clojurewerkz.money.amounts :as ma :refer (total zero)])
+   [clojurewerkz.money.amounts :as ma :refer (total zero multiply)])
   )
 
 (def date-formatter (timeformat/formatters :date))
@@ -67,9 +67,10 @@
    (remove
     nil?
     (let [subtotal (total (map :value components))
-          vat (-> subtotal (.multipliedBy
-                                   (double vat-rate)
-                                   java.math.RoundingMode/HALF_DOWN))
+          ;; TODO Try with multiply now money bug fixed
+          vat (multiply subtotal
+                        (double vat-rate)
+                        java.math.RoundingMode/HALF_DOWN)
           tot (ma/plus subtotal vat)
           txid (d/tempid :db.part/tx)]
 
