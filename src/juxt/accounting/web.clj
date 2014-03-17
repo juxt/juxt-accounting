@@ -33,6 +33,7 @@
    [clojure.set :as set]
    [juxt.accounting.database :as db]
    [juxt.accounting.money :refer (as-money)]
+   [juxt.accounting.time :refer (to-local-date)]
    [datomic.api :as d]
    [garden.core :refer (css)]
    [garden.units :refer (px pt em percent)]
@@ -321,6 +322,51 @@
              (to-table {:formatters {:date (comp date-formatter :date)}
                         :column-order (explicit-column-order :date :box1 :box6)}))))))
 
+(defn export [dburi as-path]
+  (fn [req]
+    (html
+     [:ul
+      [:li [:a {:href (as-path req :export-balances)} "Account balances"]]
+      [:li [:a {:href (as-path req :export-transactions)} "All transactions"]]])))
+
+(defn export-balances [dburi as-path]
+  (fn [req]
+    {:status 200
+     :headers {"content-type" "text/plain;charset=utf-8"}
+     :body
+     (let [db (d/db (d/connect dburi))]
+       (let [accounts (db/get-accounts-as-table db)]
+         (->> accounts
+              (sort-by :ident)
+               (map #(assoc %
+                      :balance (db/get-balance db (:ident %))
+                      :debits (count (db/get-account-components db (:ident %) :juxt.accounting/debit))
+                      :credits (count (db/get-account-components db (:ident %) :juxt.accounting/credit))
+                      :item-count (db/count-account-components db (:ident %))))
+              (map (juxt :entity-name (comp name :ident) :debits :credits :currency (comp #(.getAmount %) :balance)))
+              (cons ["Legal entity" "Unique account identifier" "Number of debits" "Number of credits" "Currency" "Balance"])
+              (map #(apply str (interpose "," %)))
+              (interpose "\n")
+              (apply str))))}))
+
+(defn export-transactions [dburi]
+  (fn [req]
+    {:status 200
+     :headers {"content-type" "text/plain;charset=utf-8"}
+     :body
+     (let [db (d/db (d/connect dburi))]
+       (->> (db/get-all-components db :juxt.accounting/debit)
+            (sort-by :date)
+            (map (juxt (comp to-local-date :date)
+                       (comp name :db/ident :account)
+                       (comp name :db/ident :other-account)
+                       :description
+                       (comp #(.getAmount %) :value)))
+            (cons ["Date" "Debit account" "Credit account" "Description" "Value"])
+              (map #(apply str (interpose "," %)))
+              (interpose "\n")
+              (apply str)))}))
+
 ;; TODO - use the one in the latest bidi release
 (defrecord Files [options]
   bidi.bidi.Matched
@@ -357,10 +403,6 @@
      (ring-resp/content-type "text/plain")
      (ring-resp/charset "utf-8"))))
 
-#_(match-route
- (-> user/system :accounts/routing :jig.bidi/routes)
- "/accounts/arnold-clark.assets")
-
 (defn wrap-promise [p]
   (letfn [(ensure-realized [] (assert (realized? p) "Cannot lookup until deref is realized"))]
     (reify
@@ -386,7 +428,11 @@
                  :view (view-page data dburi as-path)
                  :invoices (invoices-page dburi as-path)
                  :invoice (invoice-pdf-page dburi)
-                 :vat-returns (vat-returns-page dburi)})))
+                 :vat-returns (vat-returns-page dburi)
+                 :export (export dburi as-path)
+                 :export-balances (export-balances dburi as-path)
+                 :export-transactions (export-transactions dburi)})))
+
 
 (defn create-bidi-routes
   [{bootstrap-dist-dir :bootstrap-dist
@@ -414,13 +460,19 @@
             [["views/" :view-id] (:view handlers)]
             ["invoices/" (:invoices handlers)]
             ["vat-returns/" (:vat-returns handlers)]
+            ["export/" (:export handlers)]
             ]
            (partial boilerplate template-loader [["Entities" (:entities handlers)]
                                                  ["Accounts" (:accounts handlers)]
                                                  ["Views" (:views handlers)]
                                                  ["Invoices" (:invoices handlers)]
                                                  ["VAT" (:vat-returns handlers)]
+                                                 ["Export" (:export handlers)]
                                                  ]))]
+      ["export/" [["balances" (:export-balances handlers)]
+                  ["transactions" (:export-transactions handlers)]
+                  ]]
+
       ["style.css" css-page]
       ["jquery/" (->Files {:dir (str jquery-dist-dir "/")})]
       ["bootstrap/" (->Files {:dir (str bootstrap-dist-dir "/")})]]]))

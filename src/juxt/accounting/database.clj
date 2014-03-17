@@ -165,8 +165,6 @@
       (-> (into {} (to-entity-map a db))
           (assoc :entity (into {} (to-entity-map e db)))))))
 
-#_(count (get-accounts-as-table (d/db (d/connect (-> user/system :dburi)))))
-
 (defn get-accounts-as-table [db]
   (map #(spider
          %
@@ -271,6 +269,32 @@
                       ['?other-account rtype '?component]
                       ['?entry :juxt.accounting/component '?component '?tx]
                       ]} db (to-ref-id account))]
+      (spider (zipmap [:entry :component :account :other-account :txdesc] (map #(to-entity-map % db) sol))
+              {:id [:component :db/id]
+               :entry [:entry :db/id]
+               :date [:entry :juxt.accounting/date]
+               :type [(constantly type)]
+               :component-type [:component :juxt/type]
+               :account [:account]
+               :other-account [:other-account]
+               :description [:component :juxt/description]
+               :value [:component (juxt :juxt.accounting/amount :juxt.accounting/currency) (partial apply as-money)]
+               :txdesc [:txdesc :juxt/description]
+               :invoice-item [:component :juxt.accounting/_invoice-item-component]
+               }))))
+
+(defn get-all-components
+  [db type]
+  (let [db (as-db db)
+        rtype (case type
+                :juxt.accounting/debit :juxt.accounting/credit
+                :juxt.accounting/credit :juxt.accounting/debit)]
+    (for [sol
+          (q {:find '[?entry ?component ?account ?other-account ?tx]
+              :where [['?account type '?component]
+                      ['?other-account rtype '?component]
+                      ['?entry :juxt.accounting/component '?component '?tx]
+                      ]} db)]
       (spider (zipmap [:entry :component :account :other-account :txdesc] (map #(to-entity-map % db) sol))
               {:id [:component :db/id]
                :entry [:entry :db/id]

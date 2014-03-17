@@ -10,6 +10,7 @@
    [clojurewerkz.money.amounts :as ma]
    [juxt.accounting.database :as db]
    [juxt.accounting.money :refer (as-money)]
+   [juxt.accounting.time :refer (to-local-date)]
    [clojure.pprint :refer (pprint)]
    [clj-time
     [core :as time]
@@ -19,19 +20,6 @@
    )
   (:import (jig Lifecycle))
   )
-
-(defprotocol CoerceLocalDate
-  (to-local-date [_]))
-
-(extend-protocol CoerceLocalDate
-  java.util.Date
-  (to-local-date [this] (to-local-date (from-date this)))
-  org.joda.time.DateTime
-  (to-local-date [this] (apply time/local-date ((juxt time/year time/month time/day) this)))
-  org.joda.time.LocalDate
-  (to-local-date [this] this)
-  nil
-  (to-local-date [_] nil))
 
 (defmulti get-billings (fn [associate date-stop] (:basis associate)))
 
