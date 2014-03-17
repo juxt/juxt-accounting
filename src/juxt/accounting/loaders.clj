@@ -234,11 +234,13 @@
                  :credit-account credit-account
                  :description description
                  :amount subtotal
+                 :component-type :net
                  }
                 {:debit-account vat-account
                  :credit-account credit-account
                  :description (str "VAT on " description)
                  :amount vat
+                 :component-type :vat
                  }])
               (format "Invoice payable, line %s of %s" (:line (meta tx)) txfile))))))
 
