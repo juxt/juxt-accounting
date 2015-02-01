@@ -12,7 +12,7 @@ Asking for a single accounting package to do everything is asking for a hugely-b
 
 Accounting mistakes in software are more likely if only a few people are free to inspect the code.
 
-Finally, the HMRC (the UK tax authority) force businesses into using proprietary software by allowing any free-software alternatives. In the case of payroll software it offers a single choice of proprietary software for download. This seems to be at odds with the official UK government's advice to its own departments :-
+Finally, the HMRC (the UK tax authority) force businesses into using proprietary software by not allowing any free-software alternatives. In the case of payroll software it offers a single choice of proprietary software for download. This seems to be at odds with the official UK government's advice to its own departments :-
 
 > "Software that is developed to meet the needs of the government - whether it’s developed by government employees, contractors or by a supplier - should be shared wherever possible under a permissive, GPL-compatible open source licence (eg MIT/X11 or 3-clause BSD) so that it can be widely used and improved." -- https://www.gov.uk/service-manual/making-software/choosing-technology.html
 
