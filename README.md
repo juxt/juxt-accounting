@@ -76,9 +76,10 @@ These entries are first _assembled_ into a list before being inserted, all at on
 If you make use of the software and it becomes valuable to you, we ask that you make a one-off payment of £100 or BTC 1.00. These payments help to improve the software. Please make UK cheques payable to JUXT LTD. and send to :-
 
     JUXT LTD.
-    40 Beaufort Drive,
-    Barton Seagrave.
-    KETTERING. NN15 6SF
+    8 Barbers Walk,
+    Tring.
+    HP23 4DB
+    UK
 
 We welcome payment in BTC. Please contact ```info@juxt.pro``` and ask for our BTC payment address.
 
